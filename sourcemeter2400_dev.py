@@ -110,7 +110,7 @@ class KeithleyDebug:
         """
         if self._closed:
             raise RuntimeError("Cannot write: device is closed.")
-        print(f"Write: {cmd}")
+        #print(f"Write: {cmd}")
 
     def query(self, cmd: str):
         """Simulate a query command to the device.
@@ -128,7 +128,8 @@ class KeithleyDebug:
         if cmd == "SYSTEM:ERROR?":
             return '0,"No error"\n'
         else:
-            print(f"Query: {cmd}")
+            # print(f"Query: {cmd}")
+            pass
         return None
 
 
