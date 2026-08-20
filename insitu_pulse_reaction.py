@@ -14,7 +14,7 @@ from ScopeFoundry import Measurement, h5_io
 import numpy as np
 import time
 
-HIP_TESTING = False
+HIP_TESTING = True
 
 class InsituPulseReaction(Measurement):
     # -------------------------------------------------------------------------
@@ -580,18 +580,18 @@ class InsituPulseReaction(Measurement):
         
         # TODO: Uncomment this.
         if HIP_TESTING:
-            # Laser shutter
-            try:
-                laser_in_shutter = self.app.hardware['laser_in_shutter']
-                laser_in_shutter.settings['named_position'] = 'CLOSED'
-            except:
-                raise RuntimeError("Could not connect to shutter.")
+            # # Laser shutter
+            # try:
+            #     laser_in_shutter = self.app.hardware['laser_in_shutter']
+            #     laser_in_shutter.settings['named_position'] = 'CLOSED'
+            # except:
+            #     raise RuntimeError("Could not connect to shutter.")
 
             # Picam
             try:
                 self.picam = self.app.hardware['picam']
-                self.picam_measure = self.app.measurements['picam_readout']
-                self.picam_measure.interrupt()
+                self.picam_readout = self.app.measurements['picam_readout']
+                self.picam_readout.interrupt()
                 # Make sure hw settings are synced.
                 self.picam.commit_parameters()
             except:
@@ -690,26 +690,6 @@ class InsituPulseReaction(Measurement):
                 
                 # If open, close it. Otherwise do nothing
                 print("Close laser.")
-
-        def measure_raman(cycle_number):
-            """Measure the raman"""
-            # print("Measure Raman")
-            if HIP_TESTING:
-                dat = self.picam.cam.acquire(readout_count=1, readout_timeout=-1)
-            
-                roi_data = self.picam.cam.reshape_frame_data(dat)
-                spectra =  self.roi_data[0].sum(axis=0)
-            if self.debug:
-                fwhm = 75
-                center = 350
-                gamma = fwhm / 2.0
-                amplitude = cycle_number
-                spectra = amplitude * (gamma**2 / ((self.raman_shifts - center)**2 + gamma**2))
-
-                spectra = list(spectra)
-
-            self.dm.data_append_spectra(cycle_number,spectra)
-            return
             
 
         def start_zero_cycle(num_calibration_pts=5): 
@@ -779,9 +759,14 @@ class InsituPulseReaction(Measurement):
                 self.wave_numbers = 1 / self.raman_shifts
             else:
                 # Raman Measurement
-                self.wls = np.array(self.picam_measure.wls)
-                self.wave_numbers = np.array(self.picam_measure.wave_numbers)
-                self.raman_shifts = np.array(self.picam_measure.raman_shifts)
+                self.picam_readout.settings['continuous'] = False
+                self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
+
+                self.wls = np.array(self.picam_readout.wls)
+                self.wave_numbers = np.array(self.picam_readout.wave_numbers)
+                self.raman_shifts = np.array(self.picam_readout.raman_shifts)
+
+                print(self.picam_readout.spectrum)
         
             self.dm.data['wavelengths']  = list(self.wls)
             self.dm.data['wave numbers'] = list(self.wave_numbers)
@@ -789,6 +774,27 @@ class InsituPulseReaction(Measurement):
             # H['spectra'] = np.zeros((len(depths), len(self.wls)), dtype=float)
             
             # self.spectra = np.zeros((len(depths), len(self.wls)), dtype=float)*np.NaN
+
+        def measure_raman(cycle_number):
+            """Measure the raman"""
+            # print("Measure Raman")
+            if HIP_TESTING:
+                self.start_nested_measure_and_wait(self.spec_readout, polling_time=0.1, start_time=0.1)
+                spectra = self.picam_readout.spec
+                # dat = self.picam.cam.acquire(readout_count=1, readout_timeout=-1)
+                # roi_data = self.picam.cam.reshape_frame_data(dat)
+                # spectra =  roi_data[0].sum(axis=0)
+            if self.debug:
+                fwhm = 75
+                center = 350
+                gamma = fwhm / 2.0
+                amplitude = cycle_number
+                spectra = amplitude * (gamma**2 / ((self.raman_shifts - center)**2 + gamma**2))
+
+                spectra = list(spectra)
+
+            self.dm.data_append_spectra(cycle_number,spectra)
+            return
 
         
         def step_voltage_routine(pulse_or_reference,cycle_num):
@@ -866,7 +872,7 @@ class InsituPulseReaction(Measurement):
             step_voltage_routine('pulse',cycle_num)
             step_voltage_routine('reference',cycle_num)
 
-            measure_raman(cycle_num)
+            #measure_raman(cycle_num)
 
             self.sig_worker.update_plot.emit() 
 
