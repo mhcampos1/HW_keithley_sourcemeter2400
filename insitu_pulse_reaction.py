@@ -362,7 +362,6 @@ class InsituPulseReaction(Measurement):
             self.plot.setLabel('bottom', cfg.x_label, units=cfg.x_units)
             self.plot.setLabel('left', cfg.y_label, units=cfg.y_units)
             
-
         def plot_reset(self):
             """
             Clears all currently plotted data from the screen without 
@@ -375,7 +374,6 @@ class InsituPulseReaction(Measurement):
                 else:
                     item.setData([], [])
                 
-
         def plot_update(self):
             """Updates the PlotDataItems with actual values from the data dictionary."""
             dataset_name = self.dataset_option.currentText()
@@ -429,7 +427,6 @@ class InsituPulseReaction(Measurement):
                     # Standard update for single-line series
                     line_obj.setData(x_val, y_val)
 
-#
         def data_reset(self):
             """
             Initializes and resets the data in a standardized form.
@@ -577,6 +574,10 @@ class InsituPulseReaction(Measurement):
         # Reference the Required Scope Foundry Hardware Class (HW)
         self.keithley  = self.app.hardware["sourcemeter2400"]
 
+        # Check to make sure that the Keithley is connected
+        if not self.keithley.settings["connected"]:
+            raise RuntimeError("Keithley Sourcemeter not connected.")
+
         
         # TODO: Uncomment this.
         if HIP_TESTING:
@@ -599,13 +600,8 @@ class InsituPulseReaction(Measurement):
 
             # # White light flip
             # # switch to laser mode
-            # self.app.hardware['white_light_flip'].settings['named_position'] = 'laser'
-        
-        # self.picam = 
+            self.white_light_flip = self.app.hardware['white_light_flip']
 
-        # Check to make sure that the Keithley is connected
-        if not self.keithley.settings["connected"]:
-            raise RuntimeError("Keithley Sourcemeter not connected.")
 
         # Reference the Keithley Low-Level Communications Device Class (Dev)
         self.dev = self.keithley.dev
@@ -692,7 +688,7 @@ class InsituPulseReaction(Measurement):
                 print("Close laser.")
             
 
-        def start_zero_cycle(num_calibration_pts=5): 
+        def calibrate_electrical_measurement(num_calibration_pts=5): 
             """
             Takes the first electrical measurements and then  calculates the
             approximate duration of each measurement. This will determine the
@@ -751,49 +747,46 @@ class InsituPulseReaction(Measurement):
             )
             return
 
-        def start_zero_cycle_raman():
-            if self.debug:
-                #print("Raman Shifts Created")
-                self.raman_shifts = np.linspace(1,1000,500)
-                self.wls = self.raman_shifts
-                self.wave_numbers = 1 / self.raman_shifts
-            else:
-                # Raman Measurement
-                self.picam_readout.settings['continuous'] = False
-                self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
-
-                self.wls = np.array(self.picam_readout.wls)
-                self.wave_numbers = np.array(self.picam_readout.wave_numbers)
-                self.raman_shifts = np.array(self.picam_readout.raman_shifts)
-
-                print(self.picam_readout.spectrum)
-        
-            self.dm.data['wavelengths']  = list(self.wls)
-            self.dm.data['wave numbers'] = list(self.wave_numbers)
-            self.dm.data['raman shifts'] = list(self.raman_shifts)
-            # H['spectra'] = np.zeros((len(depths), len(self.wls)), dtype=float)
-            
-            # self.spectra = np.zeros((len(depths), len(self.wls)), dtype=float)*np.NaN
-
         def measure_raman(cycle_number):
             """Measure the raman"""
-            # print("Measure Raman")
-            if HIP_TESTING:
-                self.start_nested_measure_and_wait(self.spec_readout, polling_time=0.1, start_time=0.1)
-                spectra = self.picam_readout.spec
-                # dat = self.picam.cam.acquire(readout_count=1, readout_timeout=-1)
-                # roi_data = self.picam.cam.reshape_frame_data(dat)
-                # spectra =  roi_data[0].sum(axis=0)
             if self.debug:
+                if cycle_num == 0:
+                    self.raman_shifts = np.linspace(1,1000,500)
+                    self.wls = self.raman_shifts
+                    self.wave_numbers = 1 / self.raman_shifts
+
                 fwhm = 75
                 center = 350
                 gamma = fwhm / 2.0
                 amplitude = cycle_number
-                spectra = amplitude * (gamma**2 / ((self.raman_shifts - center)**2 + gamma**2))
+                spectrum = amplitude * (gamma**2 / ((self.raman_shifts - center)**2 + gamma**2))
+            else:
+                self.white_light_flip.settings['named_position'] = 'laser'
+                time.sleep(1)
 
-                spectra = list(spectra)
+                # Raman Measurement
+                self.picam_readout.settings['continuous'] = False
+                self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
 
-            self.dm.data_append_spectra(cycle_number,spectra)
+                self.white_light_flip.settings['named_position'] = 'white_light'
+                time.sleep(1)
+
+                if cycle_num == 0:
+                    self.wls = np.array(self.picam_readout.wls)
+                    self.wave_numbers = np.array(self.picam_readout.wave_numbers)
+                    self.raman_shifts = np.array(self.picam_readout.raman_shifts)
+
+                    self.dm.data['wavelengths']  = list(self.wls)
+                    self.dm.data['wave numbers'] = list(self.wave_numbers)
+                    self.dm.data['raman shifts'] = list(self.raman_shifts)
+
+                spectrum = self.picam_readout.spectrum
+
+            print(self.raman_shifts)
+            print(spectrum)
+
+            self.dm.data_append_spectra(cycle_number,list(spectrum))
+
             return
 
         
@@ -863,16 +856,20 @@ class InsituPulseReaction(Measurement):
         # ---------------------------------------------------------------------
         # Run the measurement loop
         # ---------------------------------------------------------------------
-        start_zero_cycle()
-        start_zero_cycle_raman()
-        cycle_num = 1
-        self.raman_shifts = np.linspace(0,1000,500)
+        cycle_num = 0
+
         while not self.interrupt_measurement_called:
+            if cycle_num == 0:
+                measure_raman(cycle_num)
+                time.sleep(1)
+                calibrate_electrical_measurement()
+
             # Pulse sequence
             step_voltage_routine('pulse',cycle_num)
             step_voltage_routine('reference',cycle_num)
 
-            #measure_raman(cycle_num)
+            time.sleep(1)
+            measure_raman(cycle_num)
 
             self.sig_worker.update_plot.emit() 
 
@@ -888,6 +885,7 @@ class InsituPulseReaction(Measurement):
 
         # Save the data as each measurement is completed
         if self.settings["save_h5"]:
+            # self.save_h5(data=self.dm.data)
             try:
                 self.save_h5(data=self.dm.data)
             except:
