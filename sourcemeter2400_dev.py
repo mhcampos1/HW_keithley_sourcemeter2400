@@ -50,7 +50,7 @@ SHORT_CIRC_CURR = 1e-8  # Define the Short Circuit Current
 USE_GPIB = True
 
 # Overide Debug Input to Force Debug Mode
-FORCE_DEGUG = False
+FORCE_DEGUG = True
 
 # %% Keithley Control: Classes
 # =============================================================================

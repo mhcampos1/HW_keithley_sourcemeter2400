@@ -14,8 +14,6 @@ from ScopeFoundry import Measurement, h5_io
 import numpy as np
 import time
 
-HIP_TESTING = True
-
 class InsituPulseReaction(Measurement):
     # -------------------------------------------------------------------------
     # %% SETUP:
@@ -299,6 +297,33 @@ class InsituPulseReaction(Measurement):
                     # ),
                 ]
             ))
+
+            self.registry.add_plot('Raman Spectra (Background Removed)',self.PlotConfig(
+                x_label = 'Raman Shift', 
+                x_units = 'cm^-1', 
+                y_label = 'Intensity', 
+                y_units = 'a.u.', 
+                series = [
+                    self.SeriesConfig(
+                        x_data_name = 'raman shifts', 
+                        y_data_name = 'spectra_background_removed', 
+                        label = 'Raman', 
+                        pen = 'y',
+                        symbol = None,
+                        symbol_brush = 'y',
+                        symbol_pen = 'y', 
+                        depth=2
+                    ),
+                    # self.SeriesConfig(
+                    #     x_data_name = 'source time', 
+                    #     y_data_name = 'source voltage', 
+                    #     label = 'Source Voltage', 
+                    #     pen = 'b',
+                    #     symbol_brush = 'w',
+                    #     symbol_pen = 'b', 
+                    # ),
+                ]
+            ))
             
             self.data_reset()
 
@@ -453,10 +478,12 @@ class InsituPulseReaction(Measurement):
                 "meas. voltage" : [],
 
                 # Raman
+                "background" : [],
                 "wavelengths" : [],
                 "wave numbers" : [],
                 "raman shifts" : [],
-                "spectra": [ [], [] ] # [ [Cycle Num.], [Spectra] ]
+                "spectra": [ [], [] ], # [ [Cycle Num.], [Spectra] ]
+                "spectra_background_removed": [ [], [] ] # [ [Cycle Num.], [Spectra] ]
             }
         
         def data_append_measure(self,time,current,resistance,cycle_num,pul_or_ref):
@@ -481,9 +508,11 @@ class InsituPulseReaction(Measurement):
             self.data["meas. start"].append(meas_end_time)
             self.data["meas. voltage"].append(meas_source_volts)
 
-        def data_append_spectra(self,cycle_number,spectra):
+        def data_append_spectra(self,cycle_number,spectra,spectra_bkgnd_rmv):
             self.data["spectra"][0].append(cycle_number)
             self.data["spectra"][1].append(spectra)
+            self.data["spectra_background_removed"][0].append(cycle_number)
+            self.data["spectra_background_removed"][1].append(spectra_bkgnd_rmv)
 
     def setup_figure(self):
         """
@@ -578,16 +607,14 @@ class InsituPulseReaction(Measurement):
         if not self.keithley.settings["connected"]:
             raise RuntimeError("Keithley Sourcemeter not connected.")
 
-        
-        # TODO: Uncomment this.
-        if HIP_TESTING:
-            # # Laser shutter
-            # try:
-            #     laser_in_shutter = self.app.hardware['laser_in_shutter']
-            #     laser_in_shutter.settings['named_position'] = 'CLOSED'
-            # except:
-            #     raise RuntimeError("Could not connect to shutter.")
 
+        # Reference the Keithley Low-Level Communications Device Class (Dev)
+        self.dev = self.keithley.dev
+
+        # Check if the Keithley is in debug mode
+        self.debug = self.dev.debug
+
+        if not self.debug:
             # Picam
             try:
                 self.picam = self.app.hardware['picam']
@@ -598,16 +625,18 @@ class InsituPulseReaction(Measurement):
             except:
                 raise RuntimeError("Could not connect to picam.")
 
-            # # White light flip
-            # # switch to laser mode
-            self.white_light_flip = self.app.hardware['white_light_flip']
+            # White light flip
+            try:
+                self.white_light_flip = self.app.hardware['white_light_flip']
+            except:
+                raise RuntimeError("Could not connect to white light flip.")
 
-
-        # Reference the Keithley Low-Level Communications Device Class (Dev)
-        self.dev = self.keithley.dev
-
-        # Check if the Keithley is in debug mode
-        self.debug = self.dev.debug
+            # # Laser shutter
+            # try:
+            #     laser_in_shutter = self.app.hardware['laser_in_shutter']
+            #     laser_in_shutter.settings['named_position'] = 'CLOSED'
+            # except:
+            #     raise RuntimeError("Could not connect to shutter.")
 
         # ----- Prepare the Keithley -----
         # Reference the measurement settings
@@ -640,7 +669,7 @@ class InsituPulseReaction(Measurement):
 
         # Prepare the measurement
         if self.debug:
-            print("\nRunning IT Measurement")
+            print("\nRunning Measurement Loop")
             print("------------------------\n")
 
         timer = self.Timer()        
@@ -674,18 +703,22 @@ class InsituPulseReaction(Measurement):
             else:
                 return
 
-        def laser_switch(on_off:bool):
+        def laser_open(on_off:bool):
             """Switch the laser on and off."""
             if on_off:
-                # Check the status of the laser
-
-                # If closed, open it. Otherwise do nothing
-                print("Open laser.")
+                if not self.debug:
+                    self.white_light_flip.settings['named_position'] = 'laser'
+                else:
+                    print("Open laser.")
             else:
-                # Check the status of the laser
+                if not self.debug:
+                    self.white_light_flip.settings['named_position'] = 'white_light'
+                    time.sleep(1)
+                else:
+                    print("Close laser.")
                 
-                # If open, close it. Otherwise do nothing
-                print("Close laser.")
+            # Delay to allow time for flipping to finish
+            time.sleep(1)
             
 
         def calibrate_electrical_measurement(num_calibration_pts=5): 
@@ -694,19 +727,6 @@ class InsituPulseReaction(Measurement):
             approximate duration of each measurement. This will determine the
             number of measurements during each pulse and reference step.
             """
-            # Turn on the zero cycle.
-            self.keithley.write_voltage(s["Reference DC Voltage"])
-            self.keithley.write_output('ON')
-
-            self.dm.data_append_source(
-                time.time(),
-                s["Reference DC Voltage"]
-            )
-
-            # Begin timing the measurement
-            timer.start()
-            time.sleep(0.2) # Allow voltage to stabilize before measurement
-
             # Calibrate the auto range by taking a measurement and tossing it
             if s['Meas. Range'] == 'Auto':
                 self.keithley.read_current()
@@ -749,43 +769,36 @@ class InsituPulseReaction(Measurement):
 
         def measure_raman(cycle_number):
             """Measure the raman"""
+            # Unblock the laser
+            laser_open(True)
+
+            # Collect the Raman Spectrum
             if self.debug:
-                if cycle_num == 0:
-                    self.raman_shifts = np.linspace(1,1000,500)
-                    self.wls = self.raman_shifts
-                    self.wave_numbers = 1 / self.raman_shifts
+                print("Measure Raman Spectra")
 
-                fwhm = 75
-                center = 350
-                gamma = fwhm / 2.0
-                amplitude = cycle_number
-                spectrum = amplitude * (gamma**2 / ((self.raman_shifts - center)**2 + gamma**2))
-            else:
-                self.white_light_flip.settings['named_position'] = 'laser'
-                time.sleep(1)
-
+                # Generate Lorentzian test data if in debug mode
+                fwhm = 75 # Full width, half max
+                x0 = 350 # Center
+                g = fwhm / 2.0 # Gamma
+                A = cycle_number # Amplitude
+                spectrum = (
+                    A * (g**2 / ((self.raman_shifts - x0)**2 + g**2))
+                    + self.background
+                )
+            else:             
                 # Raman Measurement
                 self.picam_readout.settings['continuous'] = False
                 self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
 
-                self.white_light_flip.settings['named_position'] = 'white_light'
-                time.sleep(1)
-
-                if cycle_num == 0:
-                    self.wls = np.array(self.picam_readout.wls)
-                    self.wave_numbers = np.array(self.picam_readout.wave_numbers)
-                    self.raman_shifts = np.array(self.picam_readout.raman_shifts)
-
-                    self.dm.data['wavelengths']  = list(self.wls)
-                    self.dm.data['wave numbers'] = list(self.wave_numbers)
-                    self.dm.data['raman shifts'] = list(self.raman_shifts)
-
                 spectrum = self.picam_readout.spectrum
 
-            print(self.raman_shifts)
-            print(spectrum)
+            # Block the laser
+            laser_open(False)
 
-            self.dm.data_append_spectra(cycle_number,list(spectrum))
+            spectrum_bkgnd_rmv = spectrum - self.background
+
+            # Store the data in the data manager
+            self.dm.data_append_spectra(cycle_number, list(spectrum), list(spectrum_bkgnd_rmv))
 
             return
 
@@ -809,6 +822,10 @@ class InsituPulseReaction(Measurement):
                     time.time(),
                     s["Pulse DC Voltage"]
                 )
+
+                if self.debug:
+                    print("PULSE ROUTINE")
+
             elif pulse_or_reference == 'reference':
                 self.keithley.write_voltage(s['Reference DC Voltage'])
                 expire_time = self.reference_expire_time
@@ -818,6 +835,9 @@ class InsituPulseReaction(Measurement):
                     time.time(),
                     s["Reference DC Voltage"]
                 )
+
+                if self.debug:
+                    print("REFERENCE ROUTINE")
 
             # Begin the timer for the current cycle
             end_step = False
@@ -840,6 +860,7 @@ class InsituPulseReaction(Measurement):
 
                 self.sig_worker.update_plot.emit()
 
+            # Store the data in the data manager
             if pulse_or_reference == 'pulse':
                 self.dm.data_append_source(
                     time.time(),
@@ -859,10 +880,79 @@ class InsituPulseReaction(Measurement):
         cycle_num = 0
 
         while not self.interrupt_measurement_called:
+            if self.debug:
+                print(f"\nCycle #: {cycle_num}")
+
+            if not s["Continuous"]:
+                # Update the progress bar
+                self.sig_worker.update_progress.emit(
+                    (cycle_num) * 100.0 / s["Number of Cycles"]
+                )
+            
             if cycle_num == 0:
-                measure_raman(cycle_num)
+                # ----- Measure the Background Raman -----
+                #   Measure the Raman while the laser is blocked.
+                # Block the laser
+                laser_open(False)
+
+                # Collect the background spectrum
+                if self.debug:
+                    # Generate test data if in debug mode
+                    if cycle_num == 0:
+                        self.raman_shifts = np.linspace(1,1000,500)
+                        self.wls = self.raman_shifts
+                        self.wave_numbers = 1 / self.raman_shifts
+
+                        # Simulate linear background
+                        self.background = 0.001 * self.raman_shifts
+                else:                   
+                    # Measure the raman
+                    self.picam_readout.settings['continuous'] = False
+                    self.start_nested_measure_and_wait(
+                        self.picam_readout,
+                        polling_time=0.1
+                    )
+
+                    self.wls = np.array(self.picam_readout.wls)
+                    self.wave_numbers = np.array(self.picam_readout.wave_numbers)
+                    self.raman_shifts = np.array(self.picam_readout.raman_shifts)
+
+                    self.background = self.picam_readout.spectrum
+
+                # Store the data in the Data Manager
+                self.dm.data['wavelengths']  = list(self.wls)
+                self.dm.data['wave numbers'] = list(self.wave_numbers)
+                self.dm.data['raman shifts'] = list(self.raman_shifts)
+                self.dm.data['background']   = list(self.background)
+
                 time.sleep(1)
+
+                # ----- Turn on the Sourcemeter & Calibrate -----
+                # Turn on the voltage output on the sourcemeter
+                self.keithley.write_voltage(0)
+                self.keithley.write_output('ON')
+                time.sleep(0.2)
+
+                # Record the reference
+                self.keithley.write_voltage(s["Reference DC Voltage"])
+                self.dm.data_append_source(
+                    time.time(),
+                    s["Reference DC Voltage"]
+                )
+
+                # Begin timing the measurement
+                timer.start()
+                time.sleep(0.2) # Allow voltage to stabilize before measurement
+
+                # Calibrate the timing of the pulse measurements
                 calibrate_electrical_measurement()
+
+                # Take the first raman measurement of the sample
+                measure_raman(cycle_num)
+
+                # Continue to the next cycle
+                cycle_num = cycle_num + 1
+                continue
 
             # Pulse sequence
             step_voltage_routine('pulse',cycle_num)
@@ -902,14 +992,9 @@ class InsituPulseReaction(Measurement):
                 print("\nWARNING!: h5 failed to save. Saved as .json.\n")
 
     def post_run(self):
-        # Try to change the setpoint to zero
+        # Try to change the setpoint to zero and turn off the Keithley
         try:
             self.keithley.write_voltage(0)
-        except:
-            pass
-
-        # Try to turn off the Keitheley
-        try:
             self.keithley.write_output('OFF')
         except:
             pass
