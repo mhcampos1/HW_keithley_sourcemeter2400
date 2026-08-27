@@ -445,8 +445,13 @@ class InsituPulseReaction(Measurement):
                             current_lines.append(new_line)
 
                         # Remove this
-                        # print(x_val)
-                        # print(spec_data)
+                        print("x_val")
+                        print(x_val)
+                        print("\n \n \n")
+
+                        print("spec_data")
+                        print(spec_data)
+                        print("\n \n \n")
                         current_lines[i].setData(x_val, spec_data)
                 else:
                     # Standard update for single-line series
@@ -485,6 +490,9 @@ class InsituPulseReaction(Measurement):
                 "spectra": [ [], [] ], # [ [Cycle Num.], [Spectra] ]
                 "spectra_background_removed": [ [], [] ] # [ [Cycle Num.], [Spectra] ]
             }
+
+            # Stores the current voltage source setpoint
+            self.current_source_voltage = 0
         
         def data_append_measure(self,time,current,resistance,cycle_num,pul_or_ref):
             if pul_or_ref == 'pulse':
@@ -498,9 +506,14 @@ class InsituPulseReaction(Measurement):
                 self.data["ref. resistance"].append(resistance)
                 self.data["ref. cycle"].append(cycle_num)
 
-        def data_append_source(self,source_time,source_voltage):
+        def data_append_source(self,source_time,new_source_voltage):
             self.data["source time"].append(source_time)
-            self.data["source voltage"].append(source_voltage)
+            self.data["source voltage"].append(self.current_source_voltage)
+
+            self.data["source time"].append(source_time)
+            self.data["source voltage"].append(new_source_voltage)
+
+            self.current_source_voltage = new_source_voltage
 
         def data_append_read(self, meas_start_time,meas_end_time, meas_source_volts):
             # Data about the measurement
@@ -654,6 +667,9 @@ class InsituPulseReaction(Measurement):
             sense_range = self.settings['Meas. Range'],
         )
 
+        # Set the current source voltage
+        self.current_source_voltage = 0
+
         # Set voltage setpoint to the DC Voltage
         if self.debug:
             print('\nPREPARE IT MEASUREMENT')
@@ -672,7 +688,7 @@ class InsituPulseReaction(Measurement):
             print("\nRunning Measurement Loop")
             print("------------------------\n")
 
-        timer = self.Timer()        
+        self.timer = self.Timer()        
 
         def measure_current(pulse_or_reference, cycle_num,
                             output_duration=False):
@@ -680,9 +696,9 @@ class InsituPulseReaction(Measurement):
             Handles the electrical measurement.
             """
             # Measure the current and duration of the measurement.
-            meas_start = timer.time()
+            meas_start = self.timer.time()
             (voltage, current, current_err, resistance) = self.keithley.read_current()
-            meas_end = timer.time()
+            meas_end = self.timer.time()
 
             # TODO: Add short circuit detection here.
 
@@ -762,13 +778,21 @@ class InsituPulseReaction(Measurement):
             )
 
             self.dm.data_append_source(
-                time.time(),
+                self.timer.time(),
                 s["Reference DC Voltage"]
             )
             return
 
         def measure_raman(cycle_number):
             """Measure the raman"""
+            # Set the voltage to zero
+            self.keithley.write_voltage(0)
+
+            self.dm.data_append_source(
+                self.timer.time(),
+                0
+            )
+
             # Unblock the laser
             laser_open(True)
 
@@ -785,7 +809,8 @@ class InsituPulseReaction(Measurement):
                     A * (g**2 / ((self.raman_shifts - x0)**2 + g**2))
                     + self.background
                 )
-            else:             
+
+            else:                          
                 # Raman Measurement
                 self.picam_readout.settings['continuous'] = False
                 self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
@@ -798,8 +823,7 @@ class InsituPulseReaction(Measurement):
             spectrum_bkgnd_rmv = spectrum - self.background
 
             # Store the data in the data manager
-            self.dm.data_append_spectra(cycle_number, list(spectrum), list(spectrum_bkgnd_rmv))
-
+            self.dm.data_append_spectra(cycle_number, spectrum, spectrum_bkgnd_rmv)
             return
 
         
@@ -819,7 +843,7 @@ class InsituPulseReaction(Measurement):
                 width = s['Pulse Width']
 
                 self.dm.data_append_source(
-                    time.time(),
+                    self.timer.time(),
                     s["Pulse DC Voltage"]
                 )
 
@@ -832,7 +856,7 @@ class InsituPulseReaction(Measurement):
                 width = s['Reference Width']
 
                 self.dm.data_append_source(
-                    time.time(),
+                    self.timer.time(),
                     s["Reference DC Voltage"]
                 )
 
@@ -859,18 +883,6 @@ class InsituPulseReaction(Measurement):
                         time.sleep(width - current_time)
 
                 self.sig_worker.update_plot.emit()
-
-            # Store the data in the data manager
-            if pulse_or_reference == 'pulse':
-                self.dm.data_append_source(
-                    time.time(),
-                    s["Pulse DC Voltage"]
-                )
-            elif pulse_or_reference == 'reference':
-                self.dm.data_append_source(
-                    time.time(),
-                    s["Reference DC Voltage"]
-                )
             
             return
 
@@ -928,6 +940,10 @@ class InsituPulseReaction(Measurement):
                 time.sleep(1)
 
                 # ----- Turn on the Sourcemeter & Calibrate -----
+                # Begin timing the measurement
+                self.timer.start()
+                time.sleep(0.2) # Allow voltage to stabilize before measurement
+
                 # Turn on the voltage output on the sourcemeter
                 self.keithley.write_voltage(0)
                 self.keithley.write_output('ON')
@@ -936,13 +952,9 @@ class InsituPulseReaction(Measurement):
                 # Record the reference
                 self.keithley.write_voltage(s["Reference DC Voltage"])
                 self.dm.data_append_source(
-                    time.time(),
+                    self.timer.time(),
                     s["Reference DC Voltage"]
                 )
-
-                # Begin timing the measurement
-                timer.start()
-                time.sleep(0.2) # Allow voltage to stabilize before measurement
 
                 # Calibrate the timing of the pulse measurements
                 calibrate_electrical_measurement()
