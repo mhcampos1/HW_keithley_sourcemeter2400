@@ -413,20 +413,12 @@ class InsituPulseReaction(Measurement):
                 x_val = self.data.get(s.x_data_name, [])
                 y_val = self.data.get(s.y_data_name, [])
 
+                # # Remove this
+                # print(x_val)
+                # print(y_val)
+
                 if s.depth == 2:
-                    # if x_val is None or len(x_val) == 0:
-                    #     # Print a clear warning to the console so you know exactly what's missing
-                    #     print(f"Warning: X-axis data '{s.x_data_name}' is missing or empty. Skipping plot.")
-                    #     continue 
-
-                    # if y_val is None or len(y_val) == 0:
-                    #     # Print a clear warning to the console so you know exactly what's missing
-                    #     print(f"Warning: Y-axis data '{s.y_data_name}' is missing or empty. Skipping plot.")
-                    #     continue
-
-                    # print("Plotting Depth 2")
-                    # y_val is [ [CycleNums], [SpectraArrays] ]
-                    spectra_list = y_val[1] if isinstance(y_val, list) and len(y_val) > 1 else []
+                    spectra_list = y_val
                     
                     # Handle the list of PlotDataItems
                     current_lines = line_obj 
@@ -444,14 +436,6 @@ class InsituPulseReaction(Measurement):
                             self.plot.addItem(new_line)
                             current_lines.append(new_line)
 
-                        # Remove this
-                        print("x_val")
-                        print(x_val)
-                        print("\n \n \n")
-
-                        print("spec_data")
-                        print(spec_data)
-                        print("\n \n \n")
                         current_lines[i].setData(x_val, spec_data)
                 else:
                     # Standard update for single-line series
@@ -487,8 +471,11 @@ class InsituPulseReaction(Measurement):
                 "wavelengths" : [],
                 "wave numbers" : [],
                 "raman shifts" : [],
-                "spectra": [ [], [] ], # [ [Cycle Num.], [Spectra] ]
-                "spectra_background_removed": [ [], [] ] # [ [Cycle Num.], [Spectra] ]
+                "spectra_cycle" : [],
+                "spectra": [],
+                "spectra_background_removed": []
+                # "spectra": [ [], [] ], # [ [Cycle Num.], [Spectra] ]
+                # "spectra_background_removed": [ [], [] ] # [ [Cycle Num.], [Spectra] ]
             }
 
             # Stores the current voltage source setpoint
@@ -522,10 +509,9 @@ class InsituPulseReaction(Measurement):
             self.data["meas. voltage"].append(meas_source_volts)
 
         def data_append_spectra(self,cycle_number,spectra,spectra_bkgnd_rmv):
-            self.data["spectra"][0].append(cycle_number)
-            self.data["spectra"][1].append(spectra)
-            self.data["spectra_background_removed"][0].append(cycle_number)
-            self.data["spectra_background_removed"][1].append(spectra_bkgnd_rmv)
+            self.data["spectra_cycle"].append(cycle_number)
+            self.data["spectra"].append(spectra)
+            self.data["spectra_background_removed"].append(spectra_bkgnd_rmv)
 
     def setup_figure(self):
         """
