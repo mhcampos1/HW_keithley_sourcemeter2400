@@ -174,6 +174,8 @@ class InsituPulseReaction(Measurement):
             x_units: str
             y_label: str
             y_units: str
+            x_autoscale : bool =  True
+            y_autoscale : bool =  True
             series: List['DataManager.SeriesConfig'] = field(default_factory=list)
 
         class PlotRegistry:
@@ -273,9 +275,11 @@ class InsituPulseReaction(Measurement):
 
             self.registry.add_plot('Raman Spectra', self.PlotConfig(
                 x_label = 'Raman Shift', 
-                x_units = 'cm^-1', 
+                x_units = 'cm^-1',
                 y_label = 'Intensity', 
                 y_units = 'a.u.', 
+                x_autoscale = False,
+                y_autoscale = False,
                 series = [
                     self.SeriesConfig(
                         x_data_name = 'raman shifts', 
@@ -303,6 +307,8 @@ class InsituPulseReaction(Measurement):
                 x_units = 'cm^-1', 
                 y_label = 'Intensity', 
                 y_units = 'a.u.', 
+                x_autoscale = False,
+                y_autoscale = False,
                 series = [
                     self.SeriesConfig(
                         x_data_name = 'raman shifts', 
@@ -384,8 +390,15 @@ class InsituPulseReaction(Measurement):
                     self.plot_lines.append(line)
                     self.legend.addItem(line, s.label)
     
-            self.plot.setLabel('bottom', cfg.x_label, units=cfg.x_units)
-            self.plot.setLabel('left', cfg.y_label, units=cfg.y_units)
+            if cfg.x_autoscale:
+                self.plot.setLabel('bottom', cfg.x_label, units=cfg.x_units)
+            else:
+                self.plot.setLabel('bottom', cfg.x_label+f" ({cfg.x_units})")
+
+            if cfg.y_autoscale:
+                self.plot.setLabel('left', cfg.y_label, units=cfg.y_units)
+            else:
+                self.plot.setLabel('left', cfg.y_label+f" ({cfg.y_units})")
             
         def plot_reset(self):
             """
