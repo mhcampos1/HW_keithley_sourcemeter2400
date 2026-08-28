@@ -120,7 +120,7 @@ class IVmeasurement(Measurement):
 
         # Voltage sweeping range
         self.voltage_range = s.New_Range(
-            "Voltage Range", initials = [-1, 1, 0.1], unit = "V", si=True, 
+            "Voltage Range", initials = [-0.1, 0.1, 0.02], unit = "V", si=True, 
             vmin = -20, vmax = 20,
             description = "Voltage sweep range."
         )

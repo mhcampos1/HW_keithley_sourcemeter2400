@@ -57,6 +57,11 @@ class Sourcemeter2400HW(HardwareComponent):
         S.New("beeper", bool, initial=False, ro=False,
                 description= "Unmute/mute the beeper on the Keithley.")
 
+        # Compliance Voltage
+        S.New("short_circuit_current", float, initial = 1e-10, ro=False, unit='A', si=True,
+              description='Current value use to determine if a short circuit '
+              'exists.')
+
 
         # Save the options registry
         self.options = OptionRegistry()
@@ -137,6 +142,9 @@ class Sourcemeter2400HW(HardwareComponent):
             self.dev.write_voltage(0)
         elif self.options.voltage.contains(source): # Source Current
             self.dev.write_current(0)
+
+    def is_short_circuit(self,current):
+        return current < self.settings["short_circuit_current"]
 
     def write_voltage(self, voltage):
         self.dev.write_voltage(voltage)

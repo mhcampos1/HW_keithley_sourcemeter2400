@@ -712,6 +712,10 @@ class InsituPulseReaction(Measurement):
                 pulse_or_reference
             )
 
+            # Check to make sure the device hasn't broken
+            if self.keithley.is_short_circuit(current):
+                self.interrupt_measurement_called = True
+
             # Return the measurement duration if necessary
             if output_duration:
                 return meas_duration
@@ -882,6 +886,11 @@ class InsituPulseReaction(Measurement):
                         time.sleep(width - current_time)
 
                 self.sig_worker.update_plot.emit()
+
+                # Check if end measurement was called during the pulse step
+                if (self.interrupt_measurement_called and 
+                    pulse_or_reference == 'pulse'):
+                    end_step = True
             
             return
 
