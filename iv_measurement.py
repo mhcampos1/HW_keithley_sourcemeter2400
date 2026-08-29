@@ -40,7 +40,7 @@ class IVmeasurement(Measurement):
             Initializes the DataManager with a unique name for identification.
             """
             self.name = name
-            self.data = {"V": [], "I": []}  # Initialize with the expected data structure
+            self.data = {"voltage": [], "current": [], "avg_resistance":float}  # Initialize with the expected data structure
             self.plot_lines = {}
 
         def plot_build(self) -> pg.GraphicsLayoutWidget:
@@ -81,14 +81,14 @@ class IVmeasurement(Measurement):
             """
             Resets the internal data storage to empty lists.
             """
-            self.data = {"V": [], "I": []}
+            self.data = {"voltage": [], "current": []}
 
         def data_append(self, voltage: float, current: float):
             """
             Appends a new data point to the internal data structures.
             """
-            self.data["V"].append(voltage)
-            self.data["I"].append(current)
+            self.data["voltage"].append(voltage)
+            self.data["current"].append(current)
 
         def plot_reset(self):
             """
@@ -104,7 +104,15 @@ class IVmeasurement(Measurement):
             """
             if "IV" in self.plot_lines:
                 line = self.plot_lines["IV"]
-                line.setData(self.data["V"], self.data["I"])
+                line.setData(self.data["voltage"], self.data["current"])
+
+        def calc_avg_resistance(self):
+            """
+            """
+            if len(self.data["voltage"]):
+                R_avg, b = np.polyfit(np.array(self.data["current"]),np.array(self.data["voltage"]),1)
+
+            print(f"Avg. Resistance: {R_avg:.3e} Ω")
 
     def setup(self):
         """
@@ -330,6 +338,9 @@ class IVmeasurement(Measurement):
 
         # End the measurement
         self.hw.write_output('OFF')
+
+        # Calculate the average resistance
+        self.dm.calc_avg_resistance()
 
         # Save the data as each measurement is completed
         if self.settings["save_h5"]:
