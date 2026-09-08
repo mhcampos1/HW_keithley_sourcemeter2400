@@ -108,6 +108,7 @@ class InsituPulseReaction(Measurement):
         # Number of Power Line Cycles (NPLC)
         s.New(
             "Short Circuit Current", float, initial=1e-6, vmin=1e-11,
+            unit='A',si=True,
             description=("Current for detecting broken device.")
         )
 
@@ -566,9 +567,16 @@ class InsituPulseReaction(Measurement):
         mset_layout=QtWidgets.QVBoxLayout()
         mset_layout.addWidget(
             self.settings.New_UI(
-                include = ("Continuous","Number of Cycles",
-                            "Meas. Range", "NPLC"),
+                include = ("Meas. Range", "NPLC"),
                 title="Collection Settings"
+            )
+        )
+
+        mset_layout.addWidget(
+            self.settings.New_UI(
+                include = ("Continuous","Number of Cycles",
+                            "Short Circuit Current"),
+                title="Interruption Settings"
             )
         )
 
