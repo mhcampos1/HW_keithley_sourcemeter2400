@@ -721,6 +721,7 @@ class InsituPulseReaction(Measurement):
             # Check to make sure the device hasn't broken
             if s["Short Circuit Current"] >= current:
                 self.interrupt_measurement_called = True
+                print("Short circuited detected.")
 
             # Return the measurement duration if necessary
             if output_duration:
@@ -738,12 +739,11 @@ class InsituPulseReaction(Measurement):
             else:
                 if not self.debug:
                     self.white_light_flip.settings['named_position'] = 'white_light'
-                    time.sleep(1)
                 else:
                     print("Close laser.")
                 
             # Delay to allow time for flipping to finish
-            time.sleep(1)
+            time.sleep(2)
             
 
         def calibrate_electrical_measurement(num_calibration_pts=5): 
