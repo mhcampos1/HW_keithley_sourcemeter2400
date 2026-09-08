@@ -105,6 +105,12 @@ class InsituPulseReaction(Measurement):
 
         s.New("Meas. Range", str, choices=meas_range_choices)
 
+        # Number of Power Line Cycles (NPLC)
+        s.New(
+            "Short Circuit Current", float, initial=1e-6, vmin=1e-11,
+            description=("Current for detecting broken device.")
+        )
+
 
         # Initialize the Data Manager
         self.dm = self.DataManager(self.name)
@@ -713,7 +719,7 @@ class InsituPulseReaction(Measurement):
             )
 
             # Check to make sure the device hasn't broken
-            if self.keithley.is_short_circuit(current):
+            if s["Short Circuit Current"] >= current:
                 self.interrupt_measurement_called = True
 
             # Return the measurement duration if necessary
