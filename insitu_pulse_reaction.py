@@ -269,18 +269,31 @@ class InsituPulseReaction(Measurement):
                         symbol_brush = 'y',
                         symbol_pen = 'y', 
                     ),
-                    # self.SeriesConfig(
-                    #     x_data_name = 'source time', 
-                    #     y_data_name = 'source voltage', 
-                    #     label = 'Source Voltage', 
-                    #     pen = 'b',
-                    #     symbol_brush = 'w',
-                    #     symbol_pen = 'b', 
-                    # ),
                 ]
             ))
 
-            self.registry.add_plot('Raman Spectra', self.PlotConfig(
+            self.registry.add_plot('Raman Spectra (Change)', self.PlotConfig(
+                x_label = 'Raman Shift', 
+                x_units = 'cm^-1',
+                y_label = 'Intensity', 
+                y_units = 'a.u.', 
+                x_autoscale = False,
+                y_autoscale = False,
+                series = [
+                    self.SeriesConfig(
+                        x_data_name = 'raman shifts', 
+                        y_data_name = 'spectra_change', 
+                        label = 'Raman', 
+                        pen = 'y',
+                        symbol = None,
+                        symbol_brush = 'y',
+                        symbol_pen = 'y', 
+                        depth=2
+                    ),
+                ]
+            ))
+
+            self.registry.add_plot('Raman Spectra (Raw)', self.PlotConfig(
                 x_label = 'Raman Shift', 
                 x_units = 'cm^-1',
                 y_label = 'Intensity', 
@@ -298,14 +311,6 @@ class InsituPulseReaction(Measurement):
                         symbol_pen = 'y', 
                         depth=2
                     ),
-                    # self.SeriesConfig(
-                    #     x_data_name = 'source time', 
-                    #     y_data_name = 'source voltage', 
-                    #     label = 'Source Voltage', 
-                    #     pen = 'b',
-                    #     symbol_brush = 'w',
-                    #     symbol_pen = 'b', 
-                    # ),
                 ]
             ))
 
@@ -327,14 +332,6 @@ class InsituPulseReaction(Measurement):
                         symbol_pen = 'y', 
                         depth=2
                     ),
-                    # self.SeriesConfig(
-                    #     x_data_name = 'source time', 
-                    #     y_data_name = 'source voltage', 
-                    #     label = 'Source Voltage', 
-                    #     pen = 'b',
-                    #     symbol_brush = 'w',
-                    #     symbol_pen = 'b', 
-                    # ),
                 ]
             ))
             
@@ -365,6 +362,7 @@ class InsituPulseReaction(Measurement):
         def _handleDataSetChange(self):
             self.plot_setFormat()
             self.plot_update()
+            self.plot.enableAutoRange()
 
         def plot_setFormat(self):
             """Updates visual formatting based on the selected registry config."""
@@ -493,7 +491,8 @@ class InsituPulseReaction(Measurement):
                 "raman shifts" : [],
                 "spectra_cycle" : [],
                 "spectra": [],
-                "spectra_background_removed": []
+                "spectra_background_removed": [],
+                "spectra_change": []
                 # "spectra": [ [], [] ], # [ [Cycle Num.], [Spectra] ]
                 # "spectra_background_removed": [ [], [] ] # [ [Cycle Num.], [Spectra] ]
             }
@@ -528,10 +527,14 @@ class InsituPulseReaction(Measurement):
             self.data["meas. start"].append(meas_end_time)
             self.data["meas. voltage"].append(meas_source_volts)
 
-        def data_append_spectra(self,cycle_number,spectra,spectra_bkgnd_rmv):
+        def data_append_spectra(
+                self,cycle_number,spectra,spectra_bkgnd_rmv, spectra_change
+            ):
+
             self.data["spectra_cycle"].append(cycle_number)
             self.data["spectra"].append(spectra)
             self.data["spectra_background_removed"].append(spectra_bkgnd_rmv)
+            self.data["spectra_change"].append(spectra_change)
 
     def setup_figure(self):
         """
@@ -821,7 +824,7 @@ class InsituPulseReaction(Measurement):
                 fwhm = 75 # Full width, half max
                 x0 = 350 # Center
                 g = fwhm / 2.0 # Gamma
-                A = cycle_number # Amplitude
+                A = cycle_number + 1 # Amplitude
                 spectrum = (
                     A * (g**2 / ((self.raman_shifts - x0)**2 + g**2))
                     + self.background
@@ -837,10 +840,16 @@ class InsituPulseReaction(Measurement):
             # Block the laser
             laser_open(False)
 
+            if cycle_num == 0:
+                self.first_spectrum = spectrum
+
             spectrum_bkgnd_rmv = spectrum - self.background
+            spectrum_change = spectrum - self.first_spectrum
 
             # Store the data in the data manager
-            self.dm.data_append_spectra(cycle_number, spectrum, spectrum_bkgnd_rmv)
+            self.dm.data_append_spectra(
+                cycle_number, spectrum, spectrum_bkgnd_rmv, spectrum_change
+            )
             return
 
         
