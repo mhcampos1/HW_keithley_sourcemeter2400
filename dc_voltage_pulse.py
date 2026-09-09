@@ -690,7 +690,7 @@ class DcVoltagePulse(Measurement):
             # End the measurement once the stop time is reached
             if not s["Continuous"]:
                 if cycle_num >= s["Number of Cycles"]:
-                    self.interrupt_measurement_called = True
+                    break
 
             cycle_num = cycle_num + 1
 

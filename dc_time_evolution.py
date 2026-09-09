@@ -346,7 +346,7 @@ class DCTimeEvolution(Measurement):
             # End the measurement once the stop time is reached
             if not s["Continuous"]:
                 if curr_time > s["Stop Time"]:
-                    self.interrupt_measurement_called = True
+                    break
 
         # End the measurement
         self.hw.write_output('OFF')
