@@ -30,6 +30,14 @@ class InsituPulseReaction(Measurement):
         """
         s = self.settings
 
+        # ----- Mode Choices -----
+        mode_choices = (
+                    ('Single Point', 'single_pt'), 
+                    ('Mapping', 'mapping'),
+        )
+        
+        s.New("Mode", str,choices=mode_choices)
+
         # ----- Pulse Settings -----
         # Pulse Voltage
         s.New(
@@ -546,6 +554,14 @@ class InsituPulseReaction(Measurement):
 
         # Pulse and Reference settings layout (pul)
         volt_layout=QtWidgets.QVBoxLayout()
+
+        volt_layout.addWidget(
+            self.settings.New_UI(
+                include = ("Mode",),
+                title="Measurement Mode",
+            )
+        )
+
         volt_layout.addWidget(
             self.settings.New_UI(
                 include = ("Pulse DC Voltage",
@@ -820,20 +836,59 @@ class InsituPulseReaction(Measurement):
             if self.debug:
                 print("Measure Raman Spectra")
 
-                # Generate Lorentzian test data if in debug mode
-                fwhm = 75 # Full width, half max
-                x0 = 350 # Center
-                g = fwhm / 2.0 # Gamma
-                A = cycle_number + 1 # Amplitude
-                spectrum = (
-                    A * (g**2 / ((self.raman_shifts - x0)**2 + g**2))
-                    + self.background
-                )
+                def gen_raman(noise=True,x=1,y=1):
+                    # Generate Lorentzian test data if in debug mode
+                    fwhm = 75 # Full width, half max
+                    x0 = 350 # Center
+                    g = fwhm / 2.0 # Gamma
+                    A = (cycle_number + 1) / (1 + abs(x) + abs(y)) # Amplitude
+                    spectrum = (
+                        A * (g**2 / ((self.raman_shifts - x0)**2 + g**2))
+                        + self.background
+                    )
+                    return spectrum
+
+                if self.settings["Mode"] == "mapping":
+                    x = np.linspace(-10,10,5)
+                    y = np.linspace(-5,5,5)
+                    k = 0
+
+                    scan_shape = (1,len(y),len(x),len(self.raman_shifts))
+
+                    # Add the spectral dimension to scan_shape.
+                    self.spec_map = np.zeros(
+                        scan_shape + (len(self.raman_shifts),),
+                        dtype=float
+                    )
+
+                    for j, y_j in enumerate(y):
+                        for i, x_i in enumerate(x):
+                            spectrum = gen_raman(
+                                x=x_i,
+                                y=y_j
+                            )
+
+                            self.spec_map[k, j, i, :] = spectrum
+
+                            # print(
+                            #     f"k={k}, j={j}, i={i}, "
+                            #     f"x={x_i:.2f} um, "
+                            #     f"y={y_j:.2f} um, "
+                            #     f"spectrum shape={spectrum.shape}"
+                            # )
+
+                    # print(self.spec_map)
+                else: 
+                        spectrum = gen_raman()
 
             else:                          
-                # Raman Measurement
-                self.picam_readout.settings['continuous'] = False
-                self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
+                if self.settings["Mode"] == "mapping":
+                    # TODO: Add neested measurement
+                    pass
+                else:
+                    # Raman Measurement
+                    self.picam_readout.settings['continuous'] = False
+                    self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
 
                 spectrum = self.picam_readout.spectrum
 
