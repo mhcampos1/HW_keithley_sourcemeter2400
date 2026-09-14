@@ -36,41 +36,41 @@ class InsituPulseReaction(Measurement):
                     ('Mapping', 'mapping'),
         )
         
-        s.New("Mode", str,choices=mode_choices)
+        s.New("mode", str,choices=mode_choices)
 
         # ----- Pulse Settings -----
         # Pulse Voltage
         s.New(
-            "Pulse DC Voltage", float, initial=1, unit='V',si=True,
+            "pulse_voltage", float, initial=1, unit='V',si=True,
             description= ("DC voltage setpoint for heating(pulsing).")
         )
         s.New(
-            "Pulse Width", float, initial=1, unit='s',si=True,
+            "pulse_width", float, initial=1, unit='s',si=True,
             description= ("Duration of the heating voltage pulse.")
         )
         s.New(
-            "Pulse Meas. Delay", float, initial=0.15, unit='s',si=True,
+            "pulse_meas_delay", float, initial=0.15, unit='s',si=True,
             description= ("Time delay between electrical measurements.")
         )
 
         # ----- Reference -----
         # Reference Voltage
         s.New(
-            "Reference DC Voltage", float, initial=0.1, unit='V',si=True,
+            "reference_voltage", float, initial=0.1, unit='V',si=True,
             description= ("DC voltage for measuring the cold resistance.")
         )
         s.New(
-            "Reference Width", float, initial=1, unit='s',si=True,
+            "reference_width", float, initial=1, unit='s',si=True,
             description= ("Duration of the reference voltage pulse.")
         )
         s.New(
-            "Reference Meas. Delay", float, initial=0.15, unit='s',si=True,
+            "reference_meas_delay", float, initial=0.15, unit='s',si=True,
             description= ("Time delay between electrical measurements.")
         )
 
         # Voltage Stabilization Time
         s.New(
-            "Voltage Stabilization Time", float, initial=0.2, unit='s',si=True,
+            "voltage_stabilization_time", float, initial=0.2, unit='s',si=True,
             description= ("Time delay before taking a measurement after a new"
                           "voltage is applied.")
         )
@@ -83,19 +83,19 @@ class InsituPulseReaction(Measurement):
         
         # Continuous
         s.New(
-            "Continuous", bool, initial=False,
+            "continuous", bool, initial=False,
             description=("Enable continuous measuring without stoppage time.")
         )
 
         # Duration
         s.New(
-            "Number of Cycles", int, initial=1,
+            "number_of_cycles", int, initial=1,
             description= ("Number of cylces before stopping.")
         )
 
         # Number of Power Line Cycles (NPLC)
         s.New(
-            "NPLC", float, initial=1, vmin=0.01, vmax=10,
+            "nplc", float, initial=1, vmin=0.01, vmax=10,
             description=("Number of power line cycles (0.01-10)."
                          "Proportional to the integration time.")
         )
@@ -111,11 +111,11 @@ class InsituPulseReaction(Measurement):
             ('3.00000 A', '3.00000 A')
         )
 
-        s.New("Meas. Range", str, choices=meas_range_choices)
+        s.New("meas_range", str, choices=meas_range_choices)
 
         # Number of Power Line Cycles (NPLC)
         s.New(
-            "Short Circuit Current", float, initial=1e-6, vmin=1e-11,
+            "short_circuit_current", float, initial=1e-6, vmin=1e-11,
             unit='A',si=True,
             description=("Current for detecting broken device.")
         )
@@ -557,25 +557,25 @@ class InsituPulseReaction(Measurement):
 
         volt_layout.addWidget(
             self.settings.New_UI(
-                include = ("Mode",),
+                include = ("mode",),
                 title="Measurement Mode",
             )
         )
 
         volt_layout.addWidget(
             self.settings.New_UI(
-                include = ("Pulse DC Voltage",
-                           "Pulse Width",
-                           "Pulse Meas. Delay"),
+                include = ("pulse_voltage",
+                           "pulse_width",
+                           "pulse_meas_delay"),
                 title="Pulse Settings",
             )
         )
 
         volt_layout.addWidget(
             self.settings.New_UI(
-                include = ("Reference DC Voltage",
-                           "Reference Width",
-                           "Reference Meas. Delay"),
+                include = ("reference_voltage",
+                           "reference_width",
+                           "reference_meas_delay"),
                 title="Reference Settings",
             )
         )
@@ -586,15 +586,15 @@ class InsituPulseReaction(Measurement):
         mset_layout=QtWidgets.QVBoxLayout()
         mset_layout.addWidget(
             self.settings.New_UI(
-                include = ("Meas. Range", "NPLC"),
+                include = ("meas_range", "nplc"),
                 title="Collection Settings"
             )
         )
 
         mset_layout.addWidget(
             self.settings.New_UI(
-                include = ("Continuous","Number of Cycles",
-                            "Short Circuit Current"),
+                include = ("continuous","number_of_cycles",
+                            "short_circuit_current"),
                 title="Interruption Settings"
             )
         )
@@ -746,7 +746,7 @@ class InsituPulseReaction(Measurement):
             )
 
             # Check to make sure the device hasn't broken
-            if s["Short Circuit Current"] >= current:
+            if s["short_circuit_current"] >= current:
                 self.interrupt_measurement_called = True
                 print("Short circuited detected.")
 
@@ -804,18 +804,18 @@ class InsituPulseReaction(Measurement):
                 return step_expire_time
 
             self.pulse_expire_time = calc_step_expire_time(
-                s["Pulse Width"],
-                s["Pulse Meas. Delay"]
+                s["pulse_width"],
+                s["pulse_meas_delay"]
             )
 
             self.reference_expire_time = calc_step_expire_time(
-                s["Reference Width"],
-                s["Reference Meas. Delay"]
+                s["reference_width"],
+                s["reference_meas_delay"]
             )
 
             self.dm.data_append_source(
                 self.timer.time(),
-                s["Reference DC Voltage"]
+                s["reference_voltage"]
             )
             return
 
@@ -848,7 +848,7 @@ class InsituPulseReaction(Measurement):
                     )
                     return spectrum
 
-                if self.settings["Mode"] == "mapping":
+                if self.settings["mode"] == "mapping":
                     x = np.linspace(-10,10,5)
                     y = np.linspace(-5,5,5)
                     k = 0
@@ -882,7 +882,7 @@ class InsituPulseReaction(Measurement):
                         spectrum = gen_raman()
 
             else:                          
-                if self.settings["Mode"] == "mapping":
+                if self.settings["mode"] == "mapping":
                     # TODO: Add neested measurement
                     pass
                 else:
@@ -925,7 +925,7 @@ class InsituPulseReaction(Measurement):
 
                 self.dm.data_append_source(
                     self.timer.time(),
-                    s["Pulse DC Voltage"]
+                    s["pulse_voltage"]
                 )
 
                 if self.debug:
@@ -938,7 +938,7 @@ class InsituPulseReaction(Measurement):
 
                 self.dm.data_append_source(
                     self.timer.time(),
-                    s["Reference DC Voltage"]
+                    s["reference_voltage"]
                 )
 
                 if self.debug:
@@ -981,10 +981,10 @@ class InsituPulseReaction(Measurement):
             if self.debug:
                 print(f"\nCycle #: {cycle_num}")
 
-            if not s["Continuous"]:
+            if not s["continuous"]:
                 # Update the progress bar
                 self.sig_worker.update_progress.emit(
-                    (cycle_num) * 100.0 / s["Number of Cycles"]
+                    (cycle_num) * 100.0 / s["number_of_cycles"]
                 )
             
             if cycle_num == 0:
@@ -1036,10 +1036,10 @@ class InsituPulseReaction(Measurement):
                 time.sleep(0.2)
 
                 # Record the reference
-                self.keithley.write_voltage(s["Reference DC Voltage"])
+                self.keithley.write_voltage(s["reference_voltage"])
                 self.dm.data_append_source(
                     self.timer.time(),
-                    s["Reference DC Voltage"]
+                    s["reference_voltage"]
                 )
 
                 # Calibrate the timing of the pulse measurements
@@ -1062,8 +1062,8 @@ class InsituPulseReaction(Measurement):
             self.sig_worker.update_plot.emit() 
 
             # End the measurement once the stop time is reached
-            if not s["Continuous"]:
-                if cycle_num >= s["Number of Cycles"]:
+            if not s["continuous"]:
+                if cycle_num >= s["number_of_cycles"]:
                     break
 
             cycle_num = cycle_num + 1
