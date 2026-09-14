@@ -32,8 +32,8 @@ class InsituPulseReaction(Measurement):
 
         # ----- Mode Choices -----
         mode_choices = (
-                    ("Single Point", "single_pt"), 
-                    ("Mapping", "mapping"),
+            ("Mapping", "mapping"),
+            ("Single Point", "single_pt"), 
         )
         
         s.New("mode", str,choices=mode_choices)
@@ -78,7 +78,7 @@ class InsituPulseReaction(Measurement):
         # Save h5 file
         s.New(
             "save_h5", bool, 
-            initial=False
+            initial=True
         )
         
         # Continuous
@@ -500,7 +500,12 @@ class InsituPulseReaction(Measurement):
                 "spectra_cycle" : [],
                 "spectra": [],
                 "spectra_background_removed": [],
-                "spectra_change": []
+                "spectra_change": [],
+
+                "map_spectra": [],
+                "map_pos_x": [],
+                "map_pos_y": [],
+                "map_scan_index": [],
                 # "spectra": [ [], [] ], # [ [Cycle Num.], [Spectra] ]
                 # "spectra_background_removed": [ [], [] ] # [ [Cycle Num.], [Spectra] ]
             }
@@ -544,10 +549,18 @@ class InsituPulseReaction(Measurement):
             self.data["spectra_background_removed"].append(spectra_bkgnd_rmv)
             self.data["spectra_change"].append(spectra_change)
 
+        def data_append_map_spectra(
+            self, map_spectra, map_pos_x, map_pos_y, map_scan_index
+        ):
+            self.data["map_spectra"].append(map_spectra)
+            self.data["map_pos_x"].append(map_pos_x)
+            self.data["map_pos_y"].append(map_pos_y)
+            self.data["map_scan_index"].append(map_scan_index)
+
     def setup_figure(self):
         """
         Runs once during app initialization and is responsible
-        for creating a QtWidgets.QWidget self.ui.  
+        for creating a QtWidgets.QWidget self.ui.
         """
         # ----- Measurement Control Board (cb) -----
         cb_layout = QtWidgets.QHBoxLayout()
@@ -662,11 +675,21 @@ class InsituPulseReaction(Measurement):
         if not self.debug:
             # Picam
             try:
+                # Connect to the picam
                 self.picam = self.app.hardware["picam"]
+
+                # Reference the picam_readout measurement routine
                 self.picam_readout = self.app.measurements["picam_readout"]
                 self.picam_readout.interrupt()
-                # Make sure hw settings are synced.
                 self.picam.commit_parameters()
+
+                # Reference the hyperspec_picam_mcl
+                self.hyperspec_picam_mcl = self.app.measurements[
+                    "hyperspec_picam_mcl"
+                ]
+                self.hyperspec_picam_mcl.interrupt()
+                self.hyperspec_picam_mcl.commit_parameters()
+
             except:
                 raise RuntimeError("Could not connect to picam.")
 
@@ -849,51 +872,89 @@ class InsituPulseReaction(Measurement):
                     return spectrum
 
                 if self.settings["mode"] == "mapping":
-                    x = np.linspace(-10,10,5)
-                    y = np.linspace(-5,5,5)
-                    k = 0
+                    map_pos_x = np.linspace(-10,10,5)
+                    map_pos_y = np.linspace(-5,5,5)
+                    N_spec = 1
 
-                    scan_shape = (1,len(y),len(x),len(self.raman_shifts))
+                    scan_shape = (
+                        N_spec,
+                        len(map_pos_y),
+                        len(map_pos_x)
+                    )
 
                     # Add the spectral dimension to scan_shape.
-                    self.spec_map = np.zeros(
+                    spec_map = np.zeros(
                         scan_shape + (len(self.raman_shifts),),
                         dtype=float
                     )
 
-                    for j, y_j in enumerate(y):
-                        for i, x_i in enumerate(x):
-                            spectrum = gen_raman(
-                                x=x_i,
-                                y=y_j
-                            )
+                    print(f"\nInitial Shape: {np.shape(spec_map)}")
 
-                            self.spec_map[k, j, i, :] = spectrum
+                    scan_index_array = []
+                    for k in range(N_spec):
+                        for j, y_j in enumerate(map_pos_y):
+                            for i, x_i in enumerate(map_pos_x):
+                                spectrum = gen_raman(
+                                    x=x_i,
+                                    y=y_j
+                                )
 
-                            # print(
-                            #     f"k={k}, j={j}, i={i}, "
-                            #     f"x={x_i:.2f} um, "
-                            #     f"y={y_j:.2f} um, "
-                            #     f"spectrum shape={spectrum.shape}"
-                            # )
+                                scan_index_array.append([k,j,i])
 
-                    # print(self.spec_map)
+                                spec_map[k, j, i, :] = spectrum
+
+                    scan_index_array = np.asarray(scan_index_array)
                 else: 
                         spectrum = gen_raman()
 
             else:                          
                 if self.settings["mode"] == "mapping":
                     # TODO: Add neested measurement
-                    pass
+                    self.hyperspec_picam_mcl.settings["continuous"] = False
+                    self.hyperspec_picam_mcl.settings["save_h5"] = False
+                    self.start_nested_measure_and_wait(self.hyperspec_picam_mcl)
+
+                    spec_map = self.hyperspec_picam_mcl.spec_map
+                    map_pos_x = self.hyperspec_picam_mcl.scan_h_positions
+                    map_pos_y = self.hperspec_picam_mcl.scan_v_positions
+                    map_pos_z = self.hperspec_picam_mcl.scan_v_positions
+                    scan_index = self.hperspec_picam_mcl.scan_index_arrays
+
                 else:
                     # Raman Measurement
                     self.picam_readout.settings["continuous"] = False
-                    self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
+                    self.picam_readout.settings["save_h5"] = False
+                    self.start_nested_measure_and_wait(self.picam_readout)
 
-                spectrum = self.picam_readout.spectrum
+                    spectrum = self.picam_readout.spectrum
 
             # Block the laser
             laser_open(False)
+
+            if self.settings["mode"] == "mapping":
+                self.dm.data_append_map_spectra(
+                    spec_map,
+                    map_pos_x,
+                    map_pos_y,
+                    scan_index_array
+                )
+
+                if cycle_num == 0:
+                    k_max, j_max, i_max = scan_index_array.max(axis=0)
+                    self.map_center_index = (
+                        k_max // 2,
+                        j_max // 2,
+                        i_max // 2,
+                    )
+
+                print(f"\nSpectrum Map: {np.shape(spec_map)}")
+
+                spectrum = spec_map[self.map_center_index[0],
+                                    self.map_center_index[1],
+                                    self.map_center_index[2]]
+
+                print(f"\nCenter Spectrum: {np.shape(spectrum)}")
+                #print(spectrum)
 
             if cycle_num == 0:
                 self.first_spectrum = spectrum
@@ -905,6 +966,7 @@ class InsituPulseReaction(Measurement):
             self.dm.data_append_spectra(
                 cycle_number, spectrum, spectrum_bkgnd_rmv, spectrum_change
             )
+            
             return
 
         
@@ -1091,6 +1153,9 @@ class InsituPulseReaction(Measurement):
 
     def post_run(self):
         # Try to change the setpoint to zero and turn off the Keithley
+        print("\nInsitu Pulse Reaction Complete")
+        print("------------------------------")
+
         try:
             self.keithley.write_voltage(0)
             self.keithley.write_output("OFF")
