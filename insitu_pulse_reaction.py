@@ -32,8 +32,8 @@ class InsituPulseReaction(Measurement):
 
         # ----- Mode Choices -----
         mode_choices = (
-                    ('Single Point', 'single_pt'), 
-                    ('Mapping', 'mapping'),
+                    ("Single Point", "single_pt"), 
+                    ("Mapping", "mapping"),
         )
         
         s.New("mode", str,choices=mode_choices)
@@ -41,36 +41,36 @@ class InsituPulseReaction(Measurement):
         # ----- Pulse Settings -----
         # Pulse Voltage
         s.New(
-            "pulse_voltage", float, initial=1, unit='V',si=True,
+            "pulse_voltage", float, initial=1, unit="V",si=True,
             description= ("DC voltage setpoint for heating(pulsing).")
         )
         s.New(
-            "pulse_width", float, initial=1, unit='s',si=True,
+            "pulse_width", float, initial=1, unit="s",si=True,
             description= ("Duration of the heating voltage pulse.")
         )
         s.New(
-            "pulse_meas_delay", float, initial=0.15, unit='s',si=True,
+            "pulse_meas_delay", float, initial=0.15, unit="s",si=True,
             description= ("Time delay between electrical measurements.")
         )
 
         # ----- Reference -----
         # Reference Voltage
         s.New(
-            "reference_voltage", float, initial=0.1, unit='V',si=True,
+            "reference_voltage", float, initial=0.1, unit="V",si=True,
             description= ("DC voltage for measuring the cold resistance.")
         )
         s.New(
-            "reference_width", float, initial=1, unit='s',si=True,
+            "reference_width", float, initial=1, unit="s",si=True,
             description= ("Duration of the reference voltage pulse.")
         )
         s.New(
-            "reference_meas_delay", float, initial=0.15, unit='s',si=True,
+            "reference_meas_delay", float, initial=0.15, unit="s",si=True,
             description= ("Time delay between electrical measurements.")
         )
 
         # Voltage Stabilization Time
         s.New(
-            "voltage_stabilization_time", float, initial=0.2, unit='s',si=True,
+            "voltage_stabilization_time", float, initial=0.2, unit="s",si=True,
             description= ("Time delay before taking a measurement after a new"
                           "voltage is applied.")
         )
@@ -101,14 +101,14 @@ class InsituPulseReaction(Measurement):
         )
 
         meas_range_choices = (
-            ('Auto', 'Auto'), 
-            ('10.0000 µA', '10.0000 µA'), 
-            ('100.000 µA', '100.000 µA'), 
-            ('1.00000 mA', '1.00000 mA'), 
-            ('10.0000 mA', '10.0000 mA'), 
-            ('100.000 mA', '100.000 mA'), 
-            ('1.00000 A', '1.00000 A'), 
-            ('3.00000 A', '3.00000 A')
+            ("Auto", "Auto"),
+            ("10.0000 µA", "10.0000 µA"),
+            ("100.000 µA", "100.000 µA"),
+            ("1.00000 mA", "1.00000 mA"),
+            ("10.0000 mA", "10.0000 mA"),
+            ("100.000 mA", "100.000 mA"),
+            ("1.00000 A", "1.00000 A"),
+            ("3.00000 A", "3.00000 A")
         )
 
         s.New("meas_range", str, choices=meas_range_choices)
@@ -116,7 +116,7 @@ class InsituPulseReaction(Measurement):
         # Number of Power Line Cycles (NPLC)
         s.New(
             "short_circuit_current", float, initial=1e-6, vmin=1e-11,
-            unit='A',si=True,
+            unit="A",si=True,
             description=("Current for detecting broken device.")
         )
 
@@ -191,14 +191,14 @@ class InsituPulseReaction(Measurement):
             y_units: str
             x_autoscale : bool =  True
             y_autoscale : bool =  True
-            series: List['DataManager.SeriesConfig'] = field(default_factory=list)
+            series: List["DataManager.SeriesConfig"] = field(default_factory=list)
 
         class PlotRegistry:
             """Manages the collection of available plot configurations."""
             def __init__(self):
-                self._configs: Dict[str, 'DataManager.PlotConfig'] = {}
+                self._configs: Dict[str, "DataManager.PlotConfig"] = {}
 
-            def add_plot(self, name: str, config: 'DataManager.PlotConfig'):
+            def add_plot(self, name: str, config: "DataManager.PlotConfig"):
                 self._configs[name] = config
 
             def get_all_names(self) -> List[str]:
@@ -212,132 +212,132 @@ class InsituPulseReaction(Measurement):
 
             # Initialize the Registry inside the manager
             self.registry = self.PlotRegistry()
-            self.registry.add_plot('Current', self.PlotConfig(
-                x_label = 'Time', 
-                x_units = 's', 
-                y_label = 'Current', 
-                y_units = 'A', 
+            self.registry.add_plot("Current", self.PlotConfig(
+                x_label = "Time", 
+                x_units = "s", 
+                y_label = "Current", 
+                y_units = "A", 
                 series = [
                     self.SeriesConfig(
-                        x_data_name = 'ref. time', 
-                        y_data_name = 'ref. current', 
-                        label = 'Ref Current', 
+                        x_data_name = "ref. time", 
+                        y_data_name = "ref. current", 
+                        label = "Ref Current", 
                         pen = None,
-                        symbol_brush = 'g',
-                        symbol_pen = 'g', 
+                        symbol_brush = "g",
+                        symbol_pen = "g", 
                     ),
                     self.SeriesConfig(
-                        x_data_name = 'pulse time', 
-                        y_data_name = 'pulse current', 
-                        label = 'Pulse Current', 
+                        x_data_name = "pulse time", 
+                        y_data_name = "pulse current", 
+                        label = "Pulse Current", 
                         pen = None,
-                        symbol_brush = 'r',
-                        symbol_pen = 'r', 
+                        symbol_brush = "r",
+                        symbol_pen = "r", 
                     ),
                 ]
             ))
             
-            self.registry.add_plot('Resistance', self.PlotConfig(
-                x_label = 'Time', 
-                x_units = 's', 
-                y_label = 'Resistance', 
-                y_units = 'Ω', 
+            self.registry.add_plot("Resistance", self.PlotConfig(
+                x_label = "Time", 
+                x_units = "s", 
+                y_label = "Resistance", 
+                y_units = "Ω", 
                 series = [
                     self.SeriesConfig(
-                        x_data_name = 'ref. time', 
-                        y_data_name = 'ref. resistance', 
-                        label = 'Ref Res', 
+                        x_data_name = "ref. time", 
+                        y_data_name = "ref. resistance", 
+                        label = "Ref Res", 
                         pen = None,
-                        symbol_brush = 'g',
-                        symbol_pen = 'g', 
+                        symbol_brush = "g",
+                        symbol_pen = "g", 
                     ),
                     self.SeriesConfig(
-                        x_data_name = 'pulse time', 
-                        y_data_name = 'pulse resistance', 
-                        label = 'Pulse Res', 
+                        x_data_name = "pulse time", 
+                        y_data_name = "pulse resistance", 
+                        label = "Pulse Res", 
                         pen = None,
-                        symbol_brush = 'r',
-                        symbol_pen = 'r', 
+                        symbol_brush = "r",
+                        symbol_pen = "r", 
                     ),
                 ]
             ))
             
-            self.registry.add_plot('Source Voltage', self.PlotConfig(
-                x_label = 'Time', 
-                x_units = 's', 
-                y_label = 'Source Voltage', 
-                y_units = 'V', 
+            self.registry.add_plot("Source Voltage", self.PlotConfig(
+                x_label = "Time", 
+                x_units = "s", 
+                y_label = "Source Voltage", 
+                y_units = "V", 
                 series = [
                     self.SeriesConfig(
-                        x_data_name = 'source time', 
-                        y_data_name = 'source voltage', 
-                        label = 'Source Voltage', 
-                        pen = 'y',
+                        x_data_name = "source time", 
+                        y_data_name = "source voltage", 
+                        label = "Source Voltage", 
+                        pen = "y",
                         symbol = None,
-                        symbol_brush = 'y',
-                        symbol_pen = 'y', 
+                        symbol_brush = "y",
+                        symbol_pen = "y", 
                     ),
                 ]
             ))
 
-            self.registry.add_plot('Raman Spectra (Change)', self.PlotConfig(
-                x_label = 'Raman Shift', 
-                x_units = 'cm^-1',
-                y_label = 'Intensity', 
-                y_units = 'a.u.', 
+            self.registry.add_plot("Raman Spectra (Change)", self.PlotConfig(
+                x_label = "Raman Shift", 
+                x_units = "cm^-1",
+                y_label = "Intensity", 
+                y_units = "a.u.", 
                 x_autoscale = False,
                 y_autoscale = False,
                 series = [
                     self.SeriesConfig(
-                        x_data_name = 'raman shifts', 
-                        y_data_name = 'spectra_change', 
-                        label = 'Raman', 
-                        pen = 'y',
+                        x_data_name = "raman shifts", 
+                        y_data_name = "spectra_change", 
+                        label = "Raman", 
+                        pen = "y",
                         symbol = None,
-                        symbol_brush = 'y',
-                        symbol_pen = 'y', 
+                        symbol_brush = "y",
+                        symbol_pen = "y", 
                         depth=2
                     ),
                 ]
             ))
 
-            self.registry.add_plot('Raman Spectra (Raw)', self.PlotConfig(
-                x_label = 'Raman Shift', 
-                x_units = 'cm^-1',
-                y_label = 'Intensity', 
-                y_units = 'a.u.', 
+            self.registry.add_plot("Raman Spectra (Raw)", self.PlotConfig(
+                x_label = "Raman Shift", 
+                x_units = "cm^-1",
+                y_label = "Intensity", 
+                y_units = "a.u.", 
                 x_autoscale = False,
                 y_autoscale = False,
                 series = [
                     self.SeriesConfig(
-                        x_data_name = 'raman shifts', 
-                        y_data_name = 'spectra', 
-                        label = 'Raman', 
-                        pen = 'y',
+                        x_data_name = "raman shifts", 
+                        y_data_name = "spectra", 
+                        label = "Raman", 
+                        pen = "y",
                         symbol = None,
-                        symbol_brush = 'y',
-                        symbol_pen = 'y', 
+                        symbol_brush = "y",
+                        symbol_pen = "y", 
                         depth=2
                     ),
                 ]
             ))
 
-            self.registry.add_plot('Raman Spectra (Background Removed)',self.PlotConfig(
-                x_label = 'Raman Shift', 
-                x_units = 'cm^-1', 
-                y_label = 'Intensity', 
-                y_units = 'a.u.', 
+            self.registry.add_plot("Raman Spectra (Background Removed)",self.PlotConfig(
+                x_label = "Raman Shift", 
+                x_units = "cm^-1", 
+                y_label = "Intensity", 
+                y_units = "a.u.", 
                 x_autoscale = False,
                 y_autoscale = False,
                 series = [
                     self.SeriesConfig(
-                        x_data_name = 'raman shifts', 
-                        y_data_name = 'spectra_background_removed', 
-                        label = 'Raman', 
-                        pen = 'y',
+                        x_data_name = "raman shifts", 
+                        y_data_name = "spectra_background_removed", 
+                        label = "Raman", 
+                        pen = "y",
                         symbol = None,
-                        symbol_brush = 'y',
-                        symbol_pen = 'y', 
+                        symbol_brush = "y",
+                        symbol_pen = "y", 
                         depth=2
                     ),
                 ]
@@ -391,7 +391,7 @@ class InsituPulseReaction(Measurement):
     
             for s in cfg.series:
                 if s.depth == 2:
-                    # We don't know how many spectra there are yet, 
+                    # We don"t know how many spectra there are yet, 
                     # but we prepare a list to hold them.
                     self.plot_lines.append([]) 
                 else:
@@ -404,14 +404,14 @@ class InsituPulseReaction(Measurement):
                     self.legend.addItem(line, s.label)
     
             if cfg.x_autoscale:
-                self.plot.setLabel('bottom', cfg.x_label, units=cfg.x_units)
+                self.plot.setLabel("bottom", cfg.x_label, units=cfg.x_units)
             else:
-                self.plot.setLabel('bottom', cfg.x_label+f" ({cfg.x_units})")
+                self.plot.setLabel("bottom", cfg.x_label+f" ({cfg.x_units})")
 
             if cfg.y_autoscale:
-                self.plot.setLabel('left', cfg.y_label, units=cfg.y_units)
+                self.plot.setLabel("left", cfg.y_label, units=cfg.y_units)
             else:
-                self.plot.setLabel('left', cfg.y_label+f" ({cfg.y_units})")
+                self.plot.setLabel("left", cfg.y_label+f" ({cfg.y_units})")
             
         def plot_reset(self):
             """
@@ -458,7 +458,7 @@ class InsituPulseReaction(Measurement):
                         if i >= len(current_lines):
                             # print("pass")
                             # Create new line without adding to legend
-                            new_line = pg.PlotDataItem(pen='white') 
+                            new_line = pg.PlotDataItem(pen="white") 
                             self.plot.addItem(new_line)
                             current_lines.append(new_line)
 
@@ -509,12 +509,12 @@ class InsituPulseReaction(Measurement):
             self.current_source_voltage = 0
         
         def data_append_measure(self,time,current,resistance,cycle_num,pul_or_ref):
-            if pul_or_ref == 'pulse':
+            if pul_or_ref == "pulse":
                 self.data["pulse time"].append(time)
                 self.data["pulse current"].append(current)
                 self.data["pulse resistance"].append(resistance)
                 self.data["pulse cycle"].append(cycle_num)
-            elif pul_or_ref == 'reference':
+            elif pul_or_ref == "reference":
                 self.data["ref. time"].append(time)
                 self.data["ref. current"].append(current)
                 self.data["ref. resistance"].append(resistance)
@@ -662,8 +662,8 @@ class InsituPulseReaction(Measurement):
         if not self.debug:
             # Picam
             try:
-                self.picam = self.app.hardware['picam']
-                self.picam_readout = self.app.measurements['picam_readout']
+                self.picam = self.app.hardware["picam"]
+                self.picam_readout = self.app.measurements["picam_readout"]
                 self.picam_readout.interrupt()
                 # Make sure hw settings are synced.
                 self.picam.commit_parameters()
@@ -672,14 +672,14 @@ class InsituPulseReaction(Measurement):
 
             # White light flip
             try:
-                self.white_light_flip = self.app.hardware['white_light_flip']
+                self.white_light_flip = self.app.hardware["white_light_flip"]
             except:
                 raise RuntimeError("Could not connect to white light flip.")
 
             # # Laser shutter
             # try:
-            #     laser_in_shutter = self.app.hardware['laser_in_shutter']
-            #     laser_in_shutter.settings['named_position'] = 'CLOSED'
+            #     laser_in_shutter = self.app.hardware["laser_in_shutter"]
+            #     laser_in_shutter.settings["named_position"] = "CLOSED"
             # except:
             #     raise RuntimeError("Could not connect to shutter.")
 
@@ -689,14 +689,14 @@ class InsituPulseReaction(Measurement):
 
         # Set the source and sense modes
         if self.debug:
-            print('\nSET SOURCE/SENSE')
+            print("\nSET SOURCE/SENSE")
 
         self.keithley.start_measurement(
-            source = 'voltage',
-            sense  = 'current',
-            NPLC = self.settings['NPLC'],
-            source_range = 'Auto',
-            sense_range = self.settings['Meas. Range'],
+            source = "voltage",
+            sense  = "current",
+            NPLC = self.settings["nplc"],
+            source_range = "Auto",
+            sense_range = self.settings["meas_range"],
         )
 
         # Set the current source voltage
@@ -704,7 +704,7 @@ class InsituPulseReaction(Measurement):
 
         # Set voltage setpoint to the DC Voltage
         if self.debug:
-            print('\nPREPARE IT MEASUREMENT')
+            print("\nPREPARE IT MEASUREMENT")
     
     def run(self):
         """
@@ -745,7 +745,7 @@ class InsituPulseReaction(Measurement):
                 pulse_or_reference
             )
 
-            # Check to make sure the device hasn't broken
+            # Check to make sure the device hasn"t broken
             if s["short_circuit_current"] >= current:
                 self.interrupt_measurement_called = True
                 print("Short circuited detected.")
@@ -760,12 +760,12 @@ class InsituPulseReaction(Measurement):
             """Switch the laser on and off."""
             if on_off:
                 if not self.debug:
-                    self.white_light_flip.settings['named_position'] = 'laser'
+                    self.white_light_flip.settings["named_position"] = "laser"
                 else:
                     print("Open laser.")
             else:
                 if not self.debug:
-                    self.white_light_flip.settings['named_position'] = 'white_light'
+                    self.white_light_flip.settings["named_position"] = "white_light"
                 else:
                     print("Close laser.")
                 
@@ -780,7 +780,7 @@ class InsituPulseReaction(Measurement):
             number of measurements during each pulse and reference step.
             """
             # Calibrate the auto range by taking a measurement and tossing it
-            if s['Meas. Range'] == 'Auto':
+            if s["meas_range"] == "Auto":
                 self.keithley.read_current()
 
             # Measurement data
@@ -788,7 +788,7 @@ class InsituPulseReaction(Measurement):
             for N in range(num_calibration_pts):
                 durations.append(
                     measure_current(
-                        'reference',
+                        "reference",
                         int(0),
                         output_duration=True)
                 )
@@ -887,7 +887,7 @@ class InsituPulseReaction(Measurement):
                     pass
                 else:
                     # Raman Measurement
-                    self.picam_readout.settings['continuous'] = False
+                    self.picam_readout.settings["continuous"] = False
                     self.start_nested_measure_and_wait(self.picam_readout, polling_time=0.1)
 
                 spectrum = self.picam_readout.spectrum
@@ -918,10 +918,10 @@ class InsituPulseReaction(Measurement):
             the step width is met. 
             """
             # Set the voltage for the current step
-            if pulse_or_reference == 'pulse':
-                self.keithley.write_voltage(s['Pulse DC Voltage'])
+            if pulse_or_reference == "pulse":
+                self.keithley.write_voltage(s["pulse_voltage"])
                 expire_time = self.pulse_expire_time
-                width = s['Pulse Width']
+                width = s["pulse_width"]
 
                 self.dm.data_append_source(
                     self.timer.time(),
@@ -931,10 +931,10 @@ class InsituPulseReaction(Measurement):
                 if self.debug:
                     print("PULSE ROUTINE")
 
-            elif pulse_or_reference == 'reference':
-                self.keithley.write_voltage(s['Reference DC Voltage'])
+            elif pulse_or_reference == "reference":
+                self.keithley.write_voltage(s["reference_voltage"])
                 expire_time = self.reference_expire_time
-                width = s['Reference Width']
+                width = s["reference_width"]
 
                 self.dm.data_append_source(
                     self.timer.time(),
@@ -967,7 +967,7 @@ class InsituPulseReaction(Measurement):
 
                 # Check if end measurement was called during the pulse step
                 if (self.interrupt_measurement_called and 
-                    pulse_or_reference == 'pulse'):
+                    pulse_or_reference == "pulse"):
                     end_step = True
             
             return
@@ -1005,7 +1005,7 @@ class InsituPulseReaction(Measurement):
                         self.background = 0.001 * self.raman_shifts
                 else:                   
                     # Measure the raman
-                    self.picam_readout.settings['continuous'] = False
+                    self.picam_readout.settings["continuous"] = False
                     self.start_nested_measure_and_wait(
                         self.picam_readout,
                         polling_time=0.1
@@ -1018,10 +1018,10 @@ class InsituPulseReaction(Measurement):
                     self.background = self.picam_readout.spectrum
 
                 # Store the data in the Data Manager
-                self.dm.data['wavelengths']  = list(self.wls)
-                self.dm.data['wave numbers'] = list(self.wave_numbers)
-                self.dm.data['raman shifts'] = list(self.raman_shifts)
-                self.dm.data['background']   = list(self.background)
+                self.dm.data["wavelengths"]  = list(self.wls)
+                self.dm.data["wave numbers"] = list(self.wave_numbers)
+                self.dm.data["raman shifts"] = list(self.raman_shifts)
+                self.dm.data["background"]   = list(self.background)
 
                 time.sleep(1)
 
@@ -1032,7 +1032,7 @@ class InsituPulseReaction(Measurement):
 
                 # Turn on the voltage output on the sourcemeter
                 self.keithley.write_voltage(0)
-                self.keithley.write_output('ON')
+                self.keithley.write_output("ON")
                 time.sleep(0.2)
 
                 # Record the reference
@@ -1053,8 +1053,8 @@ class InsituPulseReaction(Measurement):
                 continue
 
             # Pulse sequence
-            step_voltage_routine('pulse',cycle_num)
-            step_voltage_routine('reference',cycle_num)
+            step_voltage_routine("pulse",cycle_num)
+            step_voltage_routine("reference",cycle_num)
 
             time.sleep(1)
             measure_raman(cycle_num)
@@ -1069,7 +1069,7 @@ class InsituPulseReaction(Measurement):
             cycle_num = cycle_num + 1
 
         # End the measurement
-        self.keithley.write_output('OFF')
+        self.keithley.write_output("OFF")
 
         # Save the data as each measurement is completed
         if self.settings["save_h5"]:
@@ -1093,7 +1093,7 @@ class InsituPulseReaction(Measurement):
         # Try to change the setpoint to zero and turn off the Keithley
         try:
             self.keithley.write_voltage(0)
-            self.keithley.write_output('OFF')
+            self.keithley.write_output("OFF")
         except:
             pass
 
