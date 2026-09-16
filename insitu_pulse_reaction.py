@@ -677,27 +677,37 @@ class InsituPulseReaction(Measurement):
             try:
                 # Connect to the picam
                 self.picam = self.app.hardware["picam"]
+            except:
+                raise RuntimeError("Could not reference 'picam' hardware.")
 
-                # Reference the picam_readout measurement routine
+            # Reference the picam_readout measurement routine
+            try:
                 self.picam_readout = self.app.measurements["picam_readout"]
                 self.picam_readout.interrupt()
                 self.picam.commit_parameters()
+            except:
+                raise RuntimeError("Could not reference 'picam_readout' measurement.")
 
-                # Reference the hyperspec_picam_mcl
+            # Reference the hyperspec_picam_mcl
+            try:
                 self.hyperspec_picam_mcl = self.app.measurements[
                     "hyperspec_picam_mcl"
                 ]
                 self.hyperspec_picam_mcl.interrupt()
-                self.hyperspec_picam_mcl.commit_parameters()
-
             except:
-                raise RuntimeError("Could not connect to picam.")
+                raise RuntimeError("Could not reference to 'hyperspec_picam_mcl' measurement.")
+
+            # MCL Stage (Piezo):
+            try:
+                self.mcl_stage_xyz = self.app.hardware["mcl_xyz_stage"]
+            except:
+                raise RuntimeError("Could not reference 'mcl_stage_xyz' hardware.")
 
             # White light flip
             try:
                 self.white_light_flip = self.app.hardware["white_light_flip"]
             except:
-                raise RuntimeError("Could not connect to white light flip.")
+                raise RuntimeError("Could not reference 'white_light_flip' hardware.")
 
             # # Laser shutter
             # try:
@@ -910,15 +920,15 @@ class InsituPulseReaction(Measurement):
             else:                          
                 if self.settings["mode"] == "mapping":
                     # TODO: Add neested measurement
-                    self.hyperspec_picam_mcl.settings["continuous"] = False
+                    #self.hyperspec_picam_mcl.settings["continuous"] = False
                     self.hyperspec_picam_mcl.settings["save_h5"] = False
                     self.start_nested_measure_and_wait(self.hyperspec_picam_mcl)
 
                     spec_map = self.hyperspec_picam_mcl.spec_map
                     map_pos_x = self.hyperspec_picam_mcl.scan_h_positions
-                    map_pos_y = self.hperspec_picam_mcl.scan_v_positions
-                    map_pos_z = self.hperspec_picam_mcl.scan_v_positions
-                    scan_index = self.hperspec_picam_mcl.scan_index_arrays
+                    map_pos_y = self.hyperspec_picam_mcl.scan_v_positions
+                    map_pos_z = self.hyperspec_picam_mcl.scan_v_positions
+                    scan_index_array = self.hyperspec_picam_mcl.scan_index_array
 
                 else:
                     # Raman Measurement
@@ -1067,11 +1077,9 @@ class InsituPulseReaction(Measurement):
                         self.background = 0.001 * self.raman_shifts
                 else:                   
                     # Measure the raman
+                    self.picam_readout.settings["save_h5"] = True
                     self.picam_readout.settings["continuous"] = False
-                    self.start_nested_measure_and_wait(
-                        self.picam_readout,
-                        polling_time=0.1
-                    )
+                    self.start_nested_measure_and_wait(self.picam_readout)
 
                     self.wls = np.array(self.picam_readout.wls)
                     self.wave_numbers = np.array(self.picam_readout.wave_numbers)
@@ -1161,4 +1169,8 @@ class InsituPulseReaction(Measurement):
             self.keithley.write_output("OFF")
         except:
             pass
+
+        if self.settings["mode"] == "mapping":
+            # Return to the center if we are in mapping mode
+            self.mcl_stage_xyz.go_to_center_xy()
 

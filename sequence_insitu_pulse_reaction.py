@@ -36,7 +36,7 @@ class SequenceInsituPulseReaction(Measurement):
 
         # Voltage sweeping range
         self.voltage_range = s.New_Range(
-            "Voltage Range", initials = [0.5, 3, 0.1], unit = "V", si=True, 
+            "voltage_range", initials = [0.5, 3, 0.1], unit = "V", si=True, 
             vmin = -20, vmax = 20,
             description = "Voltage sweep range."
         )
@@ -58,8 +58,8 @@ class SequenceInsituPulseReaction(Measurement):
         vrng_layout=QtWidgets.QVBoxLayout()
         vrng_layout.addWidget(
             self.settings.New_UI(
-                include = ("Voltage Range_min","Voltage Range_max",
-                           "Voltage Range_step", "Voltage Range_num"),
+                include = ("voltage_range_min","voltage_range_max",
+                           "voltage_range_step", "voltage_range_num"),
                 title="Voltage Sweep",
             )
         )
@@ -102,6 +102,8 @@ class SequenceInsituPulseReaction(Measurement):
         self.insitu_pulse_reaction = self.app.measurements[
             'insitu_pulse_reaction_readout'
         ]
+
+        self.sig_worker.update_progress.emit(0.001)
     
     def run(self):
         """
@@ -121,7 +123,8 @@ class SequenceInsituPulseReaction(Measurement):
         # Sweep the voltage setpoints and measure the current
         N = len(self.voltage_range.sweep_array)
         for i, V in enumerate(self.voltage_range.sweep_array):
-            self.insitu_pulse_reaction.settings["Pulse DC Voltage"] = V
+            print(f"Experiment # {i+1}: {V:.2e} V")
+            self.insitu_pulse_reaction.settings["pulse_voltage"] = V
 
             # Begin the measurement and record if it is completed successfully
             measurement_success = self.start_nested_measure_and_wait(
@@ -130,15 +133,15 @@ class SequenceInsituPulseReaction(Measurement):
 
             # Signal to update the progress bar
             self.sig_worker.update_progress.emit((i+1) * 100.0 / N)
-            print(f"Experiment # {i+1}: {V:.2e} V")
 
             # If the last measurement was interrupted or unsuccessful end
             if not measurement_success:
                 break
 
-    # def post_run(self):
-    #     """
-    #     Inherited function that runs after the measurement run is interrupted 
-    #     or is completed.
-    #     """
-    #     # In case of interruption try to turn off the output
+    def post_run(self):
+        """
+        Inherited function that runs after the measurement run is interrupted 
+        or is completed.
+        """
+        print("\nSequenceInsituPulseReaction Complete.")
+        # In case of interruption try to turn off the output
