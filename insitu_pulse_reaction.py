@@ -32,11 +32,20 @@ class InsituPulseReaction(Measurement):
 
         # ----- Mode Choices -----
         mode_choices = (
+            ("Line Scan","line_scan"),
             ("Mapping", "mapping"),
-            ("Single Point", "single_pt"), 
+            ("Single Point", "single_pt"),
         )
         
         s.New("mode", str,choices=mode_choices)
+
+        # x range
+        # Voltage sweeping range
+        self.x_range = s.New_Range(
+            "x_range", initials = [-2e-6, 2e-6, 2e-6], unit = "m", si=True, 
+            vmin = -100, vmax = 100,
+            description = "Voltage sweep range."
+        )
 
         # ----- Pulse Settings -----
         # Pulse Voltage
@@ -89,7 +98,7 @@ class InsituPulseReaction(Measurement):
 
         # Duration
         s.New(
-            "number_of_cycles", int, initial=1,
+            "number_of_cycles", int, initial=3,
             description= ("Number of cylces before stopping.")
         )
 
@@ -565,15 +574,69 @@ class InsituPulseReaction(Measurement):
         # ----- Measurement Control Board (cb) -----
         cb_layout = QtWidgets.QHBoxLayout()
 
-        # Pulse and Reference settings layout (pul)
-        volt_layout=QtWidgets.QVBoxLayout()
+        # Mode settings layout (mode)
+        # mode_layout=QtWidgets.QVBoxLayout()
+        # mode_layout.addWidget(
+        #     self.settings.New_UI(
+        #         include = ("mode","x_range_min","x_range_max","x_range_step",
+        #                    "x_range_num"),
+        #         title="Measurement Mode",
+        #     )
+        # )
 
-        volt_layout.addWidget(
-            self.settings.New_UI(
-                include = ("mode",),
-                title="Measurement Mode",
-            )
+        # cb_layout.addLayout(mode_layout)
+
+        # ----- Measurement mode controls -----
+        mode_layout = QtWidgets.QVBoxLayout()
+
+        mode_group = QtWidgets.QGroupBox("Measurement Mode")
+        mode_group_layout = QtWidgets.QVBoxLayout(mode_group)
+
+        # Mode dropdown
+        mode_form = QtWidgets.QFormLayout()
+        self.mode_widget = (
+            self.settings.get_lq("mode").new_default_widget()
         )
+        mode_form.addRow("Mode", self.mode_widget)
+        mode_group_layout.addLayout(mode_form)
+
+        # Controls used only by line_scan
+        self.line_scan_group = QtWidgets.QGroupBox("Line Scan Settings")
+        line_scan_form = QtWidgets.QFormLayout(self.line_scan_group)
+
+        self.x_range_min_widget = (
+            self.settings.get_lq("x_range_min").new_default_widget()
+        )
+        self.x_range_max_widget = (
+            self.settings.get_lq("x_range_max").new_default_widget()
+        )
+        self.x_range_step_widget = (
+            self.settings.get_lq("x_range_step").new_default_widget()
+        )
+        self.x_range_num_widget = (
+            self.settings.get_lq("x_range_num").new_default_widget()
+        )
+
+        line_scan_form.addRow("Minimum X", self.x_range_min_widget)
+        line_scan_form.addRow("Maximum X", self.x_range_max_widget)
+        line_scan_form.addRow("X Step", self.x_range_step_widget)
+        line_scan_form.addRow("Number of Points", self.x_range_num_widget)
+
+        mode_group_layout.addWidget(self.line_scan_group)
+        mode_layout.addWidget(mode_group)
+
+        cb_layout.addLayout(mode_layout)
+
+        # Update the line-scan controls whenever the mode changes.
+        self.settings.get_lq("mode").add_listener(
+            self.update_mode_controls
+        )
+
+        # Apply the correct initial state.
+        self.update_mode_controls()
+
+        # Pulse and Reference settings layout (volt)
+        volt_layout=QtWidgets.QVBoxLayout()
 
         volt_layout.addWidget(
             self.settings.New_UI(
@@ -639,6 +702,18 @@ class InsituPulseReaction(Measurement):
         self.ui = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         self.ui.addWidget(header_widget)
         self.ui.addWidget(self.graphics_widget)
+
+    def update_mode_controls(self, *args):
+        """
+        Enable the line-scan settings only when line_scan is selected.
+
+        *args allows this method to work whether the LoggedQuantity listener
+        passes the new value as an argument or calls the listener without one.
+        """
+        is_line_scan = self.settings["mode"] == "line_scan"
+
+        # Disables the group and greys out its labels and controls.
+        self.line_scan_group.setEnabled(is_line_scan)
     
     def update_display(self):
         """
@@ -700,6 +775,11 @@ class InsituPulseReaction(Measurement):
             # MCL Stage (Piezo):
             try:
                 self.mcl_stage_xyz = self.app.hardware["mcl_xyz_stage"]
+                self.mcl_stage_xyz.read_pos()
+                self.start_position_x = self.mcl_stage_xyz.settings['x_position']
+                self.start_position_x = self.mcl_stage_xyz.settings['y_position']
+
+                print(f"Start Position: x={self.start_position_x:.3f} µm, y={self.start_position_y:.3f} µm")
             except:
                 raise RuntimeError("Could not reference 'mcl_stage_xyz' hardware.")
 
@@ -708,6 +788,9 @@ class InsituPulseReaction(Measurement):
                 self.white_light_flip = self.app.hardware["white_light_flip"]
             except:
                 raise RuntimeError("Could not reference 'white_light_flip' hardware.")
+        else:
+            self.start_position_x = 101 # um
+            self.start_position_y = 101 # um
 
             # # Laser shutter
             # try:
@@ -805,7 +888,6 @@ class InsituPulseReaction(Measurement):
             # Delay to allow time for flipping to finish
             time.sleep(2)
             
-
         def calibrate_electrical_measurement(num_calibration_pts=5): 
             """
             Takes the first electrical measurements and then  calculates the
@@ -865,62 +947,52 @@ class InsituPulseReaction(Measurement):
             # Unblock the laser
             laser_open(True)
 
-            # Collect the Raman Spectrum
-            if self.debug:
-                print("Measure Raman Spectra")
+            print("Measure Raman Spectra")
 
-                def gen_raman(noise=True,x=1,y=1):
-                    # Generate Lorentzian test data if in debug mode
-                    fwhm = 75 # Full width, half max
-                    x0 = 350 # Center
-                    g = fwhm / 2.0 # Gamma
-                    A = (cycle_number + 1) / (1 + abs(x) + abs(y)) # Amplitude
-                    spectrum = (
-                        A * (g**2 / ((self.raman_shifts - x0)**2 + g**2))
-                        + self.background
+            # ----- Line Scan Mode -----
+            if s["mode"] == "line_scan":
+                # Get the starting position of the mcl stage.
+                map_pos_x = self.x_range.sweep_array + self.start_position_x
+                map_pos_y = np.array([self.start_position_y])
+                N_spec = 1
+
+                if self.debug:
+                    (spec_map, scan_index_array) = self._gen_debug_spectra_map(
+                        cycle_num, map_pos_x, map_pos_y, N_spec
                     )
-                    return spectrum
-
-                if self.settings["mode"] == "mapping":
-                    map_pos_x = np.linspace(-10,10,5)
-                    map_pos_y = np.linspace(-5,5,5)
-                    N_spec = 1
-
-                    scan_shape = (
-                        N_spec,
-                        len(map_pos_y),
-                        len(map_pos_x)
-                    )
-
-                    # Add the spectral dimension to scan_shape.
-                    spec_map = np.zeros(
-                        scan_shape + (len(self.raman_shifts),),
-                        dtype=float
-                    )
-
-                    print(f"\nInitial Shape: {np.shape(spec_map)}")
-
-                    scan_index_array = []
+                else:
                     for k in range(N_spec):
                         for j, y_j in enumerate(map_pos_y):
                             for i, x_i in enumerate(map_pos_x):
-                                spectrum = gen_raman(
-                                    x=x_i,
-                                    y=y_j
-                                )
+                                # Move to the first point in the scan
+                                self.mcl_stage_xyz.move_pos_slow(x=x_i ,y = y_i)
 
-                                scan_index_array.append([k,j,i])
+                                # Raman measurement
+                                self.picam_readout.settings["continuous"] = False
+                                self.picam_readout.settings["save_h5"] = False
+                                self.start_nested_measure_and_wait(self.picam_readout)
 
-                                spec_map[k, j, i, :] = spectrum
+                                scan_index_array.append([k, j, i])
+                                spec_map[k, j, i, :] = self.picam_readout.spectrum
 
-                    scan_index_array = np.asarray(scan_index_array)
-                else: 
-                        spectrum = gen_raman()
+                        # Move back to the center
+                        self.mcl_stage_xyz.move_pos_slow(
+                            x= self.start_position_x ,y = self.start_position_y
+                        )
 
-            else:                          
-                if self.settings["mode"] == "mapping":
-                    # TODO: Add neested measurement
-                    #self.hyperspec_picam_mcl.settings["continuous"] = False
+            # ----- Mapping Mode -----
+            elif s["mode"] == "mapping":
+                if self.debug:
+                    map_pos_x = np.linspace(-10, 10, 5)
+                    map_pos_y = np.linspace(-5, 5, 5)
+                    N_spec = 1
+
+                    (spec_map, scan_index_array) = self._gen_debug_spectra_map(
+                        cycle_num, map_pos_x, map_pos_y, N_spec
+                    )
+
+                else:
+                    # Nested mapping measurement
                     self.hyperspec_picam_mcl.settings["save_h5"] = False
                     self.start_nested_measure_and_wait(self.hyperspec_picam_mcl)
 
@@ -930,8 +1002,13 @@ class InsituPulseReaction(Measurement):
                     map_pos_z = self.hyperspec_picam_mcl.scan_v_positions
                     scan_index_array = self.hyperspec_picam_mcl.scan_index_array
 
+            # ----- Single Pt Mode -----
+            else:
+                if self.debug:
+                    print("Measure Raman Spectra")
+                    spectrum = self._gen_debug_spectrum(cycle_num)
                 else:
-                    # Raman Measurement
+                    # Raman measurement
                     self.picam_readout.settings["continuous"] = False
                     self.picam_readout.settings["save_h5"] = False
                     self.start_nested_measure_and_wait(self.picam_readout)
@@ -941,7 +1018,7 @@ class InsituPulseReaction(Measurement):
             # Block the laser
             laser_open(False)
 
-            if self.settings["mode"] == "mapping":
+            if s["mode"] == "mapping" or s["mode"] == "line_scan":
                 self.dm.data_append_map_spectra(
                     spec_map,
                     map_pos_x,
@@ -976,9 +1053,7 @@ class InsituPulseReaction(Measurement):
             self.dm.data_append_spectra(
                 cycle_number, spectrum, spectrum_bkgnd_rmv, spectrum_change
             )
-            
             return
-
         
         def step_voltage_routine(pulse_or_reference,cycle_num):
             """
@@ -1170,7 +1245,58 @@ class InsituPulseReaction(Measurement):
         except:
             pass
 
-        if self.settings["mode"] == "mapping":
-            # Return to the center if we are in mapping mode
-            self.mcl_stage_xyz.go_to_center_xy()
+        try:
+            if self.settings["mode"] == "mapping":
+                # Return to the center if we are in mapping mode
+                self.mcl_stage_xyz.go_to_center_xy()
+            elif self.setting["mode"] == "line_scan":
+                self.mcl_stage_xyz.move_pos_slow(
+                    x = self.start_position_x ,
+                    y = self.start_position_y
+                )
+        except:
+            pass
+
+    def _gen_debug_spectrum(self,cycle_number,noise=True, x=1, y=1):
+        """Generate Lorentzian test data in debug mode."""
+        fwhm = 75
+        x0 = 350
+        gamma = fwhm / 2.0
+        amplitude = (cycle_number + 1) / (1 + abs(x) + abs(y))
+        return (
+            amplitude
+            * (gamma**2 / ((self.raman_shifts - x0) ** 2 + gamma**2))
+            + self.background
+        )
+
+    def _gen_debug_spectra_map(self, cycle_number, map_pos_x,map_pos_y,N_spec):
+        """Generates a test spectrum map."""
+        scan_shape = (
+            N_spec,
+            len(map_pos_y),
+            len(map_pos_x),
+        )
+
+        # Add the spectral dimension to scan_shape.
+        spec_map = np.zeros(
+            scan_shape + (len(self.raman_shifts),),
+            dtype=float,
+        )
+
+        print(f"\nInitial Shape: {np.shape(spec_map)}")
+
+        scan_index_array = []
+
+        for k in range(N_spec):
+            for j, y_j in enumerate(map_pos_y):
+                for i, x_i in enumerate(map_pos_x):
+                    spectrum = self._gen_debug_spectrum(
+                        cycle_number,x=x_i, y=y_j
+                    )
+
+                    scan_index_array.append([k, j, i])
+                    spec_map[k, j, i, :] = spectrum
+
+        scan_index_array = np.asarray(scan_index_array)
+        return (spec_map, scan_index_array)
 
