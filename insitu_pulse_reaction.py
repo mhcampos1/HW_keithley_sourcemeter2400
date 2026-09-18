@@ -14,6 +14,8 @@ from ScopeFoundry import Measurement, h5_io
 import numpy as np
 import time
 
+# Push to Git: git push -u origin mapping
+
 class InsituPulseReaction(Measurement):
     # -------------------------------------------------------------------------
     # %% SETUP:
@@ -759,6 +761,8 @@ class InsituPulseReaction(Measurement):
             try:
                 self.picam_readout = self.app.measurements["picam_readout"]
                 self.picam_readout.interrupt()
+                self.picam_readout.settings["save_h5"] = False
+                self.picam_readout.settings["continuous"] = False
                 self.picam.commit_parameters()
             except:
                 raise RuntimeError("Could not reference 'picam_readout' measurement.")
@@ -787,16 +791,22 @@ class InsituPulseReaction(Measurement):
                 self.white_light_flip = self.app.hardware["white_light_flip"]
             except:
                 raise RuntimeError("Could not reference 'white_light_flip' hardware.")
+    
+            try:
+                self.nd_wheel = self.app.hardware["nd_wheel"]
+                self.starting_filter_position = self.nd_wheel.read_named_position()
+            except (KeyError, ConnectionError, OSError) as exc:
+                raise RuntimeError(
+                    "ND wheel is unavailable, disconnected, or could not be read."
+                ) from exc
+            else:
+                # This runs only if the wheel was found and its position was read.
+                if self.starting_filter_position == "F_CLOSED":
+                    raise RuntimeError("ND wheel is closed and blocking the laser.")
+            
         else:
             self.start_position_x = 101 # um
             self.start_position_y = 101 # um
-
-            # # Laser shutter
-            # try:
-            #     laser_in_shutter = self.app.hardware["laser_in_shutter"]
-            #     laser_in_shutter.settings["named_position"] = "CLOSED"
-            # except:
-            #     raise RuntimeError("Could not connect to shutter.")
 
         # ----- Prepare the Keithley -----
         # Reference the measurement settings
@@ -875,12 +885,16 @@ class InsituPulseReaction(Measurement):
             """Switch the laser on and off."""
             if on_off:
                 if not self.debug:
-                    self.white_light_flip.settings["named_position"] = "laser"
+                    self.nd_wheel.settings["named_position"] = self.starting_filter_position
+                    #self.nd_wheel.goto_named_position(self.starting_filter_position)
+                    # self.white_light_flip.settings["named_position"] = "laser"
                 else:
                     print("\nOpen laser.")
             else:
                 if not self.debug:
-                    self.white_light_flip.settings["named_position"] = "white_light"
+                    self.nd_wheel.settings["named_position"] = "F_CLOSED"
+                    #self.nd_wheel.goto_named_position("F_CLOSED")
+                    # self.white_light_flip.settings["named_position"] = "white_light"
                 else:
                     print("\nClose laser.")
                 
@@ -1026,8 +1040,8 @@ class InsituPulseReaction(Measurement):
                     spectrum = self._gen_debug_spectrum(cycle_num)
                 else:
                     # Raman measurement
-                    self.picam_readout.settings["continuous"] = False
-                    self.picam_readout.settings["save_h5"] = False
+                    # self.picam_readout.settings["continuous"] = False
+                    # self.picam_readout.settings["save_h5"] = False
                     self.start_nested_measure_and_wait(self.picam_readout)
 
                     spectrum = self.picam_readout.spectrum
@@ -1167,8 +1181,8 @@ class InsituPulseReaction(Measurement):
                         self.background = 0.001 * self.raman_shifts
                 else:                   
                     # Measure the raman
-                    self.picam_readout.settings["save_h5"] = True
-                    self.picam_readout.settings["continuous"] = False
+                    # self.picam_readout.settings["save_h5"] = True
+                    # self.picam_readout.settings["continuous"] = False
                     self.start_nested_measure_and_wait(self.picam_readout)
 
                     self.wls = np.array(self.picam_readout.wls)
@@ -1270,6 +1284,11 @@ class InsituPulseReaction(Measurement):
                     x = self.start_position_x ,
                     y = self.start_position_y
                 )
+        except:
+            pass
+
+        try:
+            laser_open(False)
         except:
             pass
 
