@@ -42,7 +42,7 @@ class InsituPulseReaction(Measurement):
         # x range
         # Voltage sweeping range
         self.x_range = s.New_Range(
-            "x_range", initials = [-2e-6, 2e-6, 2e-6], unit = "m", si=True, 
+            "x_range", initials = [-10, 10, 10], unit = "um", si=False, 
             vmin = -100, vmax = 100,
             description = "Voltage sweep range."
         )
@@ -617,10 +617,10 @@ class InsituPulseReaction(Measurement):
             self.settings.get_lq("x_range_num").new_default_widget()
         )
 
-        line_scan_form.addRow("Minimum X", self.x_range_min_widget)
-        line_scan_form.addRow("Maximum X", self.x_range_max_widget)
-        line_scan_form.addRow("X Step", self.x_range_step_widget)
-        line_scan_form.addRow("Number of Points", self.x_range_num_widget)
+        line_scan_form.addRow("x_range_min", self.x_range_min_widget)
+        line_scan_form.addRow("x_range_max", self.x_range_max_widget)
+        line_scan_form.addRow("x_range_step", self.x_range_step_widget)
+        line_scan_form.addRow("x_range_num", self.x_range_num_widget)
 
         mode_group_layout.addWidget(self.line_scan_group)
         mode_layout.addWidget(mode_group)
@@ -771,13 +771,12 @@ class InsituPulseReaction(Measurement):
                 self.hyperspec_picam_mcl.interrupt()
             except:
                 raise RuntimeError("Could not reference to 'hyperspec_picam_mcl' measurement.")
-
-            # MCL Stage (Piezo):
+            
             try:
                 self.mcl_stage_xyz = self.app.hardware["mcl_xyz_stage"]
                 self.mcl_stage_xyz.read_pos()
                 self.start_position_x = self.mcl_stage_xyz.settings['x_position']
-                self.start_position_x = self.mcl_stage_xyz.settings['y_position']
+                self.start_position_y = self.mcl_stage_xyz.settings['y_position']
 
                 print(f"Start Position: x={self.start_position_x:.3f} µm, y={self.start_position_y:.3f} µm")
             except:
@@ -832,9 +831,9 @@ class InsituPulseReaction(Measurement):
         s = self.settings
 
         # Prepare the measurement
-        if self.debug:
-            print("\nRunning Measurement Loop")
-            print("------------------------\n")
+        print("\n************************************")
+        print(f"\n BEGINNING INSITU PULSE REACTION: {s["pulse_voltage"]:.2e} V")
+        print("\n************************************")
 
         self.timer = self.Timer()        
 
@@ -864,7 +863,7 @@ class InsituPulseReaction(Measurement):
             # Check to make sure the device hasn"t broken
             if s["short_circuit_current"] >= current:
                 self.interrupt_measurement_called = True
-                print("Short circuited detected.")
+                print("\nShort circuited detected.\n")
 
             # Return the measurement duration if necessary
             if output_duration:
@@ -878,12 +877,12 @@ class InsituPulseReaction(Measurement):
                 if not self.debug:
                     self.white_light_flip.settings["named_position"] = "laser"
                 else:
-                    print("Open laser.")
+                    print("\nOpen laser.")
             else:
                 if not self.debug:
                     self.white_light_flip.settings["named_position"] = "white_light"
                 else:
-                    print("Close laser.")
+                    print("\nClose laser.")
                 
             # Delay to allow time for flipping to finish
             time.sleep(2)
@@ -947,7 +946,7 @@ class InsituPulseReaction(Measurement):
             # Unblock the laser
             laser_open(True)
 
-            print("Measure Raman Spectra")
+            print(f"\nSpectra Scan: {s["mode"]} mode")
 
             # ----- Line Scan Mode -----
             if s["mode"] == "line_scan":
@@ -961,11 +960,28 @@ class InsituPulseReaction(Measurement):
                         cycle_num, map_pos_x, map_pos_y, N_spec
                     )
                 else:
+                    scan_shape = (
+                        N_spec,
+                        len(map_pos_y),
+                        len(map_pos_x),
+                    )
+
+                    # Add the spectral dimension to scan_shape.
+                    spec_map = np.zeros(
+                        scan_shape + (len(self.raman_shifts),),
+                        dtype=float,
+                    )
+
+                    # print(f"\nInitial Shape: {np.shape(spec_map)}")
+
+                    scan_index_array = []
+
                     for k in range(N_spec):
                         for j, y_j in enumerate(map_pos_y):
                             for i, x_i in enumerate(map_pos_x):
+                                print(f"\nPoint: ({k}, {j}, {i}), ({x_i:.1f},{y_j:.1f})")
                                 # Move to the first point in the scan
-                                self.mcl_stage_xyz.move_pos_slow(x=x_i ,y = y_i)
+                                self.mcl_stage_xyz.move_pos_slow(x=x_i ,y = y_j)
 
                                 # Raman measurement
                                 self.picam_readout.settings["continuous"] = False
@@ -975,10 +991,12 @@ class InsituPulseReaction(Measurement):
                                 scan_index_array.append([k, j, i])
                                 spec_map[k, j, i, :] = self.picam_readout.spectrum
 
-                        # Move back to the center
-                        self.mcl_stage_xyz.move_pos_slow(
-                            x= self.start_position_x ,y = self.start_position_y
-                        )
+                    scan_index_array = np.asarray(scan_index_array)
+
+                    # Move back to the center
+                    self.mcl_stage_xyz.move_pos_slow(
+                        x= self.start_position_x ,y = self.start_position_y
+                    )
 
             # ----- Mapping Mode -----
             elif s["mode"] == "mapping":
@@ -1005,7 +1023,6 @@ class InsituPulseReaction(Measurement):
             # ----- Single Pt Mode -----
             else:
                 if self.debug:
-                    print("Measure Raman Spectra")
                     spectrum = self._gen_debug_spectrum(cycle_num)
                 else:
                     # Raman measurement
@@ -1034,13 +1051,13 @@ class InsituPulseReaction(Measurement):
                         i_max // 2,
                     )
 
-                print(f"\nSpectrum Map: {np.shape(spec_map)}")
+                # print(f"\nSpectrum Map: {np.shape(spec_map)}")
 
                 spectrum = spec_map[self.map_center_index[0],
                                     self.map_center_index[1],
                                     self.map_center_index[2]]
 
-                print(f"\nCenter Spectrum: {np.shape(spectrum)}")
+                # print(f"\nCenter Spectrum: {np.shape(spectrum)}")
                 #print(spectrum)
 
             if cycle_num == 0:
@@ -1066,6 +1083,7 @@ class InsituPulseReaction(Measurement):
             """
             # Set the voltage for the current step
             if pulse_or_reference == "pulse":
+                print("Pulse voltage.")
                 self.keithley.write_voltage(s["pulse_voltage"])
                 expire_time = self.pulse_expire_time
                 width = s["pulse_width"]
@@ -1075,10 +1093,8 @@ class InsituPulseReaction(Measurement):
                     s["pulse_voltage"]
                 )
 
-                if self.debug:
-                    print("PULSE ROUTINE")
-
             elif pulse_or_reference == "reference":
+                print("Reference voltage.")
                 self.keithley.write_voltage(s["reference_voltage"])
                 expire_time = self.reference_expire_time
                 width = s["reference_width"]
@@ -1087,9 +1103,6 @@ class InsituPulseReaction(Measurement):
                     self.timer.time(),
                     s["reference_voltage"]
                 )
-
-                if self.debug:
-                    print("REFERENCE ROUTINE")
 
             # Begin the timer for the current cycle
             end_step = False
@@ -1125,8 +1138,9 @@ class InsituPulseReaction(Measurement):
         cycle_num = 0
 
         while not self.interrupt_measurement_called:
-            if self.debug:
-                print(f"\nCycle #: {cycle_num}")
+            print(f"\n--------------------")
+            print(f"Cycle #: {cycle_num}")
+            print(f"--------------------\n")
 
             if not s["continuous"]:
                 # Update the progress bar
@@ -1135,6 +1149,7 @@ class InsituPulseReaction(Measurement):
                 )
             
             if cycle_num == 0:
+                print("\nCalibration & Background Measurements...")
                 # ----- Measure the Background Raman -----
                 #   Measure the Raman while the laser is blocked.
                 # Block the laser
@@ -1236,8 +1251,9 @@ class InsituPulseReaction(Measurement):
 
     def post_run(self):
         # Try to change the setpoint to zero and turn off the Keithley
-        print("\nInsitu Pulse Reaction Complete")
-        print("------------------------------")
+        print("\n************************************")
+        print(f"\nINSITU PULSE REACTION ENDED: {self.settings["pulse_voltage"]:.2e} V")
+        print("\n************************************")
 
         try:
             self.keithley.write_voltage(0)
@@ -1283,7 +1299,7 @@ class InsituPulseReaction(Measurement):
             dtype=float,
         )
 
-        print(f"\nInitial Shape: {np.shape(spec_map)}")
+        # print(f"\nInitial Shape: {np.shape(spec_map)}")
 
         scan_index_array = []
 
