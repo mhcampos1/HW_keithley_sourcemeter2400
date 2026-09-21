@@ -126,7 +126,7 @@ class InsituPulseReaction(Measurement):
 
         # Number of Power Line Cycles (NPLC)
         s.New(
-            "short_circuit_current", float, initial=1e-6, vmin=1e-11,
+            "open_circuit_current", float, initial=1e-6, vmin=1e-11,
             unit="A",si=True,
             description=("Current for detecting broken device.")
         )
@@ -672,7 +672,7 @@ class InsituPulseReaction(Measurement):
         mset_layout.addWidget(
             self.settings.New_UI(
                 include = ("continuous","number_of_cycles",
-                            "short_circuit_current"),
+                            "open_circuit_current"),
                 title="Interruption Settings"
             )
         )
@@ -735,6 +735,9 @@ class InsituPulseReaction(Measurement):
         # Clear the plot
         self.dm.plot_reset()
 
+        # Make sure this is false
+        self.open_circuit_detected = False
+
         # Reference the Required Scope Foundry Hardware Class (HW)
         self.keithley  = self.app.hardware["sourcemeter2400"]
 
@@ -794,7 +797,8 @@ class InsituPulseReaction(Measurement):
     
             try:
                 self.nd_wheel = self.app.hardware["nd_wheel"]
-                self.starting_filter_position = self.nd_wheel.read_named_position()
+                self.starting_filter_position = self.nd_wheel.settings["named_position"]
+                print(f"Insitu: {self.starting_filter_position}")
             except (KeyError, ConnectionError, OSError) as exc:
                 raise RuntimeError(
                     "ND wheel is unavailable, disconnected, or could not be read."
@@ -841,9 +845,8 @@ class InsituPulseReaction(Measurement):
         s = self.settings
 
         # Prepare the measurement
-        print("\n************************************")
-        print(f"\n BEGINNING INSITU PULSE REACTION: {s["pulse_voltage"]:.2e} V")
-        print("\n************************************")
+        print("\n" + "-" * 40)
+        print(f"\nBEGINNING INSITU PULSE REACTION: {s["pulse_voltage"]:.2e} V")
 
         self.timer = self.Timer()        
 
@@ -871,9 +874,10 @@ class InsituPulseReaction(Measurement):
             )
 
             # Check to make sure the device hasn"t broken
-            if s["short_circuit_current"] >= current:
+            if s["open_circuit_current"] >= current:
                 self.interrupt_measurement_called = True
-                print("\nShort circuited detected.\n")
+                self.open_circuit_detected = True
+                print("\nOpen circuit detected.\n")
 
             # Return the measurement duration if necessary
             if output_duration:
@@ -882,24 +886,33 @@ class InsituPulseReaction(Measurement):
                 return
 
         def laser_open(on_off:bool):
-            """Switch the laser on and off."""
-            if on_off:
-                if not self.debug:
-                    self.nd_wheel.settings["named_position"] = self.starting_filter_position
-                    #self.nd_wheel.goto_named_position(self.starting_filter_position)
+            """Block and unblock the laser on and off."""
+            if not self.debug:
+                before_switch = self.nd_wheel.settings["named_position"]
+                if on_off:
                     # self.white_light_flip.settings["named_position"] = "laser"
+                    on_off_str = "Open Laser"
+                    target = self.starting_filter_position
                 else:
-                    print("\nOpen laser.")
-            else:
-                if not self.debug:
-                    self.nd_wheel.settings["named_position"] = "F_CLOSED"
-                    #self.nd_wheel.goto_named_position("F_CLOSED")
                     # self.white_light_flip.settings["named_position"] = "white_light"
+                    on_off_str = "Block Laser"
+                    target = "F_CLOSED"
+
+                if target != before_switch:
+                    self.nd_wheel.settings["named_position"] = target
+                    time.sleep(3)
                 else:
-                    print("\nClose laser.")
-                
-            # Delay to allow time for flipping to finish
-            time.sleep(2)
+                    print("\nDid not need to switch.")
+                after_switch = self.nd_wheel.settings["named_position"]
+
+                print(f"\n{on_off_str}: {before_switch} to {after_switch}, Target: {target}\n")
+            else:
+                if on_off:
+                    print("Open Laser")
+                else:
+                    print("Block Laser")
+
+                time.sleep(2)
             
         def calibrate_electrical_measurement(num_calibration_pts=5): 
             """
@@ -993,14 +1006,28 @@ class InsituPulseReaction(Measurement):
                     for k in range(N_spec):
                         for j, y_j in enumerate(map_pos_y):
                             for i, x_i in enumerate(map_pos_x):
-                                print(f"\nPoint: ({k}, {j}, {i}), ({x_i:.1f},{y_j:.1f})")
+                                print(f"\nPoint: ({k}, {j}, {i}), ({x_i:.2f},{y_j:.2f})")
                                 # Move to the first point in the scan
+                                # self.mcl_stage_xyz.read_pos()
+                                # print(f"Before Move: {self.mcl_stage_xyz.settings['x_position']:.2f} , {self.mcl_stage_xyz.settings['y_position']:.2f}")
                                 self.mcl_stage_xyz.move_pos_slow(x=x_i ,y = y_j)
+                                # self.mcl_stage_xyz.read_pos()
+                                # print(f"Immediately After Move: {self.mcl_stage_xyz.settings['x_position']:.2f} , {self.mcl_stage_xyz.settings['y_position']:.2f}")
+                                time.sleep(0.2)
+                                # self.mcl_stage_xyz.read_pos()
+                                # print(f"After Sleep 0.2s Move: {self.mcl_stage_xyz.settings['x_position']:.2f} , {self.mcl_stage_xyz.settings['y_position']:.2f}")
+                                # time.sleep(0.3)
+                                # self.mcl_stage_xyz.read_pos()
+                                # print(f"After Sleep 0.5s Move: {self.mcl_stage_xyz.settings['x_position']:.2f} , {self.mcl_stage_xyz.settings['y_position']:.2f}")
+                                # time.sleep(0.5)
+                                # self.mcl_stage_xyz.read_pos()
+                                # print(f"After Sleep 1s Move: {self.mcl_stage_xyz.settings['x_position']:.2f} , {self.mcl_stage_xyz.settings['y_position']:.2f}")
 
                                 # Raman measurement
                                 self.picam_readout.settings["continuous"] = False
                                 self.picam_readout.settings["save_h5"] = False
-                                self.start_nested_measure_and_wait(self.picam_readout)
+                                self.start_nested_measure_and_wait(
+                                    self.picam_readout, nested_interrupt=False)
 
                                 scan_index_array.append([k, j, i])
                                 spec_map[k, j, i, :] = self.picam_readout.spectrum
@@ -1026,7 +1053,7 @@ class InsituPulseReaction(Measurement):
                 else:
                     # Nested mapping measurement
                     self.hyperspec_picam_mcl.settings["save_h5"] = False
-                    self.start_nested_measure_and_wait(self.hyperspec_picam_mcl)
+                    self.start_nested_measure_and_wait(self.hyperspec_picam_mcl, nested_interrupt=False)
 
                     spec_map = self.hyperspec_picam_mcl.spec_map
                     map_pos_x = self.hyperspec_picam_mcl.scan_h_positions
@@ -1042,7 +1069,7 @@ class InsituPulseReaction(Measurement):
                     # Raman measurement
                     # self.picam_readout.settings["continuous"] = False
                     # self.picam_readout.settings["save_h5"] = False
-                    self.start_nested_measure_and_wait(self.picam_readout)
+                    self.start_nested_measure_and_wait(self.picam_readout,nested_interrupt=False)
 
                     spectrum = self.picam_readout.spectrum
 
@@ -1140,7 +1167,11 @@ class InsituPulseReaction(Measurement):
                 self.sig_worker.update_plot.emit()
 
                 # Check if end measurement was called during the pulse step
-                if (self.interrupt_measurement_called and 
+                print(self.open_circuit_detected)
+                if self.open_circuit_detected:
+                    print("Breaking")
+                    break
+                elif (self.interrupt_measurement_called and 
                     pulse_or_reference == "pulse"):
                     end_step = True
             
@@ -1152,9 +1183,9 @@ class InsituPulseReaction(Measurement):
         cycle_num = 0
 
         while not self.interrupt_measurement_called:
-            print(f"\n--------------------")
+            print("\n"+"-"*20)
             print(f"Cycle #: {cycle_num}")
-            print(f"--------------------\n")
+            print("\n"+"-"*20)
 
             if not s["continuous"]:
                 # Update the progress bar
@@ -1183,7 +1214,7 @@ class InsituPulseReaction(Measurement):
                     # Measure the raman
                     # self.picam_readout.settings["save_h5"] = True
                     # self.picam_readout.settings["continuous"] = False
-                    self.start_nested_measure_and_wait(self.picam_readout)
+                    self.start_nested_measure_and_wait(self.picam_readout, nested_interrupt=False)
 
                     self.wls = np.array(self.picam_readout.wls)
                     self.wave_numbers = np.array(self.picam_readout.wave_numbers)
@@ -1265,9 +1296,8 @@ class InsituPulseReaction(Measurement):
 
     def post_run(self):
         # Try to change the setpoint to zero and turn off the Keithley
-        print("\n************************************")
         print(f"\nINSITU PULSE REACTION ENDED: {self.settings["pulse_voltage"]:.2e} V")
-        print("\n************************************")
+        print("\n" + "-" * 40)
 
         try:
             self.keithley.write_voltage(0)
