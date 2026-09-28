@@ -37,9 +37,10 @@ class InsituPulseReaction(Measurement):
             ("Line Scan","line_scan"),
             ("Mapping", "mapping"),
             ("Single Point", "single_pt"),
+            ("None", "none")
         )
         
-        s.New("mode", str,choices=mode_choices)
+        s.New("picam_scan_mode", str,choices=mode_choices)
 
         # x range
         # Voltage sweeping range
@@ -580,7 +581,7 @@ class InsituPulseReaction(Measurement):
         # mode_layout=QtWidgets.QVBoxLayout()
         # mode_layout.addWidget(
         #     self.settings.New_UI(
-        #         include = ("mode","x_range_min","x_range_max","x_range_step",
+        #         include = ("picam_scan_mode","x_range_min","x_range_max","x_range_step",
         #                    "x_range_num"),
         #         title="Measurement Mode",
         #     )
@@ -591,13 +592,13 @@ class InsituPulseReaction(Measurement):
         # ----- Measurement mode controls -----
         mode_layout = QtWidgets.QVBoxLayout()
 
-        mode_group = QtWidgets.QGroupBox("Measurement Mode")
+        mode_group = QtWidgets.QGroupBox("Picam Scan Mode")
         mode_group_layout = QtWidgets.QVBoxLayout(mode_group)
 
         # Mode dropdown
         mode_form = QtWidgets.QFormLayout()
         self.mode_widget = (
-            self.settings.get_lq("mode").new_default_widget()
+            self.settings.get_lq("picam_scan_mode").new_default_widget()
         )
         mode_form.addRow("Mode", self.mode_widget)
         mode_group_layout.addLayout(mode_form)
@@ -630,7 +631,7 @@ class InsituPulseReaction(Measurement):
         cb_layout.addLayout(mode_layout)
 
         # Update the line-scan controls whenever the mode changes.
-        self.settings.get_lq("mode").add_listener(
+        self.settings.get_lq("picam_scan_mode").add_listener(
             self.update_mode_controls
         )
 
@@ -712,7 +713,7 @@ class InsituPulseReaction(Measurement):
         *args allows this method to work whether the LoggedQuantity listener
         passes the new value as an argument or calls the listener without one.
         """
-        is_line_scan = self.settings["mode"] == "line_scan"
+        is_line_scan = self.settings["picam_scan_mode"] == "line_scan"
 
         # Disables the group and greys out its labels and controls.
         self.line_scan_group.setEnabled(is_line_scan)
@@ -752,7 +753,7 @@ class InsituPulseReaction(Measurement):
         # Check if the Keithley is in debug mode
         self.debug = self.dev.debug
 
-        if not self.debug:
+        if (not self.debug) and (self.settings["picam_scan_mode"] != "none"):
             # Picam
             try:
                 # Connect to the picam
@@ -973,10 +974,10 @@ class InsituPulseReaction(Measurement):
             # Unblock the laser
             laser_open(True)
 
-            print(f"\nSpectra Scan: {s["mode"]} mode")
+            print(f"\nSpectra Scan: {s["picam_scan_mode"]} mode")
 
             # ----- Line Scan Mode -----
-            if s["mode"] == "line_scan":
+            if s["picam_scan_mode"] == "line_scan":
                 # Get the starting position of the mcl stage.
                 map_pos_x = self.x_range.sweep_array + self.start_position_x
                 map_pos_y = np.array([self.start_position_y])
@@ -1040,7 +1041,7 @@ class InsituPulseReaction(Measurement):
                     )
 
             # ----- Mapping Mode -----
-            elif s["mode"] == "mapping":
+            elif s["picam_scan_mode"] == "mapping":
                 if self.debug:
                     map_pos_x = np.linspace(-10, 10, 5)
                     map_pos_y = np.linspace(-5, 5, 5)
@@ -1076,7 +1077,7 @@ class InsituPulseReaction(Measurement):
             # Block the laser
             laser_open(False)
 
-            if s["mode"] == "mapping" or s["mode"] == "line_scan":
+            if s["picam_scan_mode"] == "mapping" or s["picam_scan_mode"] == "line_scan":
                 self.dm.data_append_map_spectra(
                     spec_map,
                     map_pos_x,
@@ -1167,9 +1168,9 @@ class InsituPulseReaction(Measurement):
                 self.sig_worker.update_plot.emit()
 
                 # Check if end measurement was called during the pulse step
-                print(self.open_circuit_detected)
+                # print(self.open_circuit_detected)
                 if self.open_circuit_detected:
-                    print("Breaking")
+                    print("Breaking loop, open circuit detected.")
                     break
                 elif (self.interrupt_measurement_called and 
                     pulse_or_reference == "pulse"):
@@ -1198,7 +1199,8 @@ class InsituPulseReaction(Measurement):
                 # ----- Measure the Background Raman -----
                 #   Measure the Raman while the laser is blocked.
                 # Block the laser
-                laser_open(False)
+                if s["picam_scan_mode"] != "none":
+                    laser_open(False)
 
                 # Collect the background spectrum
                 if self.debug:
@@ -1210,7 +1212,7 @@ class InsituPulseReaction(Measurement):
 
                         # Simulate linear background
                         self.background = 0.001 * self.raman_shifts
-                else:                   
+                elif self.settings["picam_scan_mode"] != "none":                   
                     # Measure the raman
                     # self.picam_readout.settings["save_h5"] = True
                     # self.picam_readout.settings["continuous"] = False
@@ -1221,12 +1223,14 @@ class InsituPulseReaction(Measurement):
                     self.raman_shifts = np.array(self.picam_readout.raman_shifts)
 
                     self.background = self.picam_readout.spectrum
-
+                
                 # Store the data in the Data Manager
-                self.dm.data["wavelengths"]  = list(self.wls)
-                self.dm.data["wave numbers"] = list(self.wave_numbers)
-                self.dm.data["raman shifts"] = list(self.raman_shifts)
-                self.dm.data["background"]   = list(self.background)
+                if self.debug or self.settings != self.settings["picam_scan_mode"] != "none":
+                    self.dm.data["wavelengths"]  = list(self.wls)
+                    self.dm.data["wave numbers"] = list(self.wave_numbers)
+                    self.dm.data["raman shifts"] = list(self.raman_shifts)
+                    self.dm.data["background"]   = list(self.background)
+            
 
                 time.sleep(1)
 
@@ -1250,8 +1254,10 @@ class InsituPulseReaction(Measurement):
                 # Calibrate the timing of the pulse measurements
                 calibrate_electrical_measurement()
 
+                
                 # Take the first raman measurement of the sample
-                measure_raman(cycle_num)
+                if s["picam_scan_mode"] != "none":
+                    measure_raman(cycle_num)
 
                 # Continue to the next cycle
                 cycle_num = cycle_num + 1
@@ -1261,8 +1267,9 @@ class InsituPulseReaction(Measurement):
             step_voltage_routine("pulse",cycle_num)
             step_voltage_routine("reference",cycle_num)
 
-            time.sleep(1)
-            measure_raman(cycle_num)
+            if s["picam_scan_mode"] != "none":
+                time.sleep(1)
+                measure_raman(cycle_num)
 
             self.sig_worker.update_plot.emit() 
 
@@ -1306,10 +1313,10 @@ class InsituPulseReaction(Measurement):
             pass
 
         try:
-            if self.settings["mode"] == "mapping":
+            if self.settings["picam_scan_mode"] == "mapping":
                 # Return to the center if we are in mapping mode
                 self.mcl_stage_xyz.go_to_center_xy()
-            elif self.setting["mode"] == "line_scan":
+            elif self.setting["picam_scan_mode"] == "line_scan":
                 self.mcl_stage_xyz.move_pos_slow(
                     x = self.start_position_x ,
                     y = self.start_position_y
