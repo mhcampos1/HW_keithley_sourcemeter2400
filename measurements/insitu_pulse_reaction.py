@@ -34,10 +34,10 @@ class InsituPulseReaction(Measurement):
 
         # ----- Mode Choices -----
         mode_choices = (
+            ("None", "none"),
             ("Line Scan","line_scan"),
             ("Mapping", "mapping"),
             ("Single Point", "single_pt"),
-            ("None", "none")
         )
         
         s.New("picam_scan_mode", str,choices=mode_choices)
@@ -1186,7 +1186,7 @@ class InsituPulseReaction(Measurement):
         while not self.interrupt_measurement_called:
             print("\n"+"-"*20)
             print(f"Cycle #: {cycle_num}")
-            print("\n"+"-"*20)
+            print("-"*20)
 
             if not s["continuous"]:
                 # Update the progress bar

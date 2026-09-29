@@ -103,12 +103,15 @@ class SequenceInsituPulseReaction(Measurement):
             'insitu_pulse_reaction_readout'
         ]
 
-        try:
-            self.nd_wheel = self.app.hardware["nd_wheel"]
-        except (KeyError, ConnectionError, OSError) as exc:
-            raise RuntimeError(
-                "ND wheel is unavailable, disconnected, or could not be read."
-            ) from exc
+        self.picam_scan_mode = self.insitu_pulse_reaction.settings["picam_scan_mode"]
+
+        if self.picam_scan_mode != "none":
+            try:
+                self.nd_wheel = self.app.hardware["nd_wheel"]
+            except (KeyError, ConnectionError, OSError) as exc:
+                raise RuntimeError(
+                    "ND wheel is unavailable, disconnected, or could not be read."
+                ) from exc
     
     def run(self):
         """
@@ -128,20 +131,22 @@ class SequenceInsituPulseReaction(Measurement):
         # Make sure the data will save
         self.insitu_pulse_reaction.settings["save_h5"] = True
 
-        starting_filter_position = self.nd_wheel.settings["named_position"]
-        print(f"Sequence Start: {starting_filter_position}")
+        if self.picam_scan_mode != "none":
+            starting_filter_position = self.nd_wheel.settings["named_position"]
+            print(f"Sequence Start: {starting_filter_position}")
 
-        if starting_filter_position == "F_CLOSED":
-            raise RuntimeError("ND wheel is closed and blocking the laser.")
+            if starting_filter_position == "F_CLOSED":
+                raise RuntimeError("ND wheel is closed and blocking the laser.")
 
         # Sweep the voltage setpoints and measure the current
         N = len(self.voltage_range.sweep_array)
         for i, V in enumerate(self.voltage_range.sweep_array):
-            print(f"Experiment # {i+1}: {V:.2e} V")
-            print(f"\nBefore Move in Sequence: {self.nd_wheel.settings["named_position"]}, Target:{starting_filter_position}")
-            self.nd_wheel.settings["named_position"] = starting_filter_position
-            time.sleep(3)
-            print(f"After Move in Sequence: {self.nd_wheel.settings["named_position"]}, Target:{starting_filter_position}\n")
+            # if self.picam_scan_mode != "none":
+            #     print(f"Experiment # {i+1}: {V:.2e} V")
+            #     print(f"\nBefore Move in Sequence: {self.nd_wheel.settings["named_position"]}, Target:{starting_filter_position}")
+            #     self.nd_wheel.settings["named_position"] = starting_filter_position
+            #     time.sleep(3)
+            #     print(f"After Move in Sequence: {self.nd_wheel.settings["named_position"]}, Target:{starting_filter_position}\n")
             self.insitu_pulse_reaction.settings["pulse_voltage"] = V
 
             # Begin the measurement and record if it is completed successfully
@@ -166,8 +171,9 @@ class SequenceInsituPulseReaction(Measurement):
         print("\n" + "-*" * 40)
 
         try:
-            self.nd_wheel.settings["named_position"] = "F_CLOSED"
-            time.sleep(3)
+            if self.picam_scan_mode != "none":
+                self.nd_wheel.settings["named_position"] = "F_CLOSED"
+                time.sleep(3)
         except:
             pass
         
